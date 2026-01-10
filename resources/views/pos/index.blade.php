@@ -126,13 +126,16 @@
 
                 <!-- Cash Payment Section -->
                 <div id="cash-payment" style="display: none;">
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">المبلغ المدفوع</label>
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">المبلغ المدفوع (للحساب فقط)</label>
                     <input type="number"
                            id="paid-amount"
                            placeholder="0.00"
                            step="0.01"
                            min="0"
                            style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; margin-bottom: 1rem;">
+                    <div style="font-size: 0.8rem; color: #7f8c8d; margin-bottom: 1rem;">
+                        ملاحظة: المبلغ المدفوع للعرض فقط. النظام يعتبر النقدية مدفوعة كاملة.
+                    </div>
 
                     <div id="change-amount" style="background: #d5dbdb; padding: 0.75rem; border-radius: 6px; text-align: center; display: none;">
                         <strong>الباقي: $<span id="change-value">0.00</span></strong>
@@ -598,6 +601,9 @@
 
             cartSummary.style.display = 'block';
             updateProcessButton();
+
+            // Recalculate change when cart updates
+            calculateChange();
         }
 
         // Customer Management Functions
@@ -695,6 +701,7 @@
             }
         }
 
+        // UPDATED: Frontend-only change calculation
         function calculateChange() {
             if (paymentMethod !== 'cash') return;
 
@@ -711,13 +718,13 @@
         function updateProcessButton() {
             const button = document.getElementById('process-sale-btn');
             const total = parseFloat(document.getElementById('total').textContent) || 0;
-            const paid = parseFloat(document.getElementById('paid-amount').value) || 0;
 
             let canProcess = false;
 
             if (cart.length > 0) {
                 if (paymentMethod === 'cash') {
-                    canProcess = paid >= total;
+                    // For cash, we don't need to validate paid amount - it's always considered paid in full
+                    canProcess = true;
                 } else if (paymentMethod === 'debt') {
                     canProcess = selectedCustomer !== null;
                 }
@@ -734,18 +741,10 @@
             }
         }
 
-        // Sale Processing
+        // UPDATED: Sale Processing - No paid_amount sent to server
         function processSale() {
             if (cart.length === 0) {
                 showMessage('السلة فارغة', 'error');
-                return;
-            }
-
-            const total = parseFloat(document.getElementById('total').textContent) || 0;
-            const paid = parseFloat(document.getElementById('paid-amount').value) || 0;
-
-            if (paymentMethod === 'cash' && paid < total) {
-                showMessage('المبلغ المدفوع أقل من المطلوب', 'error');
                 return;
             }
 
@@ -759,8 +758,8 @@
             const data = {
                 payment_method: paymentMethod,
                 customer_id: selectedCustomer ? selectedCustomer.id : null,
-                paid_amount: paymentMethod === 'cash' ? paid : null,
                 notes: document.getElementById('sale-notes').value.trim()
+                // REMOVED: paid_amount - no longer sent to server
             };
 
             fetch('/pos/process-sale', {
@@ -777,8 +776,11 @@
                     if (data.success) {
                         showMessage(data.message, 'success');
 
+                        // Calculate change on frontend for display
+                        const frontendChangeAmount = calculateFrontendChange();
+
                         // Show success modal with receipt option
-                        showSaleSuccessModal(data);
+                        showSaleSuccessModal(data, frontendChangeAmount);
 
                     } else {
                         showMessage(data.message, 'error');
@@ -791,8 +793,19 @@
                 });
         }
 
-        function showSaleSuccessModal(saleData) {
-            const changeText = saleData.change_amount > 0 ? `<div style="color: #27ae60; font-weight: bold; margin-top: 1rem;">الباقي: $${saleData.change_amount}</div>` : '';
+        // UPDATED: Calculate change on frontend for display purposes only
+        function calculateFrontendChange() {
+            if (paymentMethod !== 'cash') return 0;
+
+            const total = parseFloat(document.getElementById('total').textContent) || 0;
+            const paid = parseFloat(document.getElementById('paid-amount').value) || 0;
+
+            return Math.max(0, paid - total);
+        }
+
+        // UPDATED: Success modal with frontend-calculated change
+        function showSaleSuccessModal(saleData, changeAmount = 0) {
+            const changeText = (paymentMethod === 'cash' && changeAmount > 0) ? `<div style="color: #27ae60; font-weight: bold; margin-top: 1rem;">الباقي: $${changeAmount.toFixed(2)}</div>` : '';
 
             const modal = document.createElement('div');
             modal.id = 'sale-success-modal';

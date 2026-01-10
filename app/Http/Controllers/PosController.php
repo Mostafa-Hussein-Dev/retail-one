@@ -390,7 +390,6 @@ class PosController extends Controller
         $request->validate([
             'payment_method' => 'required|in:cash,debt',
             'customer_id' => 'required_if:payment_method,debt|nullable|exists:customers,id',
-            'paid_amount' => 'required_if:payment_method,cash|nullable|numeric|min:0',
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -428,7 +427,7 @@ class PosController extends Controller
             $sale->total_amount = $subtotal;
 
             if ($request->payment_method === 'cash') {
-                $sale->paid_amount = $request->paid_amount;
+                $sale->paid_amount = $request->total_amount;
                 $sale->debt_amount = 0;
             } else {
                 $sale->paid_amount = 0;
@@ -466,7 +465,6 @@ class PosController extends Controller
                 'message' => 'تم إتمام البيع بنجاح',
                 'sale_id' => $sale->id,
                 'receipt_number' => $sale->receipt_number,
-                'change_amount' => $sale->change_amount,
             ]);
 
         } catch (\Exception $e) {

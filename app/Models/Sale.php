@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class Sale extends Model
 {
@@ -40,7 +42,6 @@ class Sale extends Model
         'items_count',
         'status',
         'total_amount_lbp',
-        'change_amount',
     ];
 
     // Relationships
@@ -95,11 +96,6 @@ class Sale extends Model
     public function getTotalAmountLbpAttribute(): float
     {
         return $this->total_amount * config('pos.exchange_rate', 89500);
-    }
-
-    public function getChangeAmountAttribute(): float
-    {
-        return max(0, $this->paid_amount - $this->total_amount);
     }
 
     // Scopes
@@ -213,7 +209,7 @@ class Sale extends Model
     public function completeSale(): bool
     {
         try {
-            \DB::transaction(function () {
+            DB::transaction(function () {
                 // Reduce stock for all items
                 foreach ($this->items as $item) {
                     $product = $item->product;
@@ -242,7 +238,7 @@ class Sale extends Model
 
             return true;
         } catch (\Exception $e) {
-            \Log::error('Sale completion failed: ' . $e->getMessage());
+            Log::error('Sale completion failed: ' . $e->getMessage());
             return false;
         }
     }
