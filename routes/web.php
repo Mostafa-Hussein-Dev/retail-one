@@ -48,7 +48,6 @@ Route::middleware('auth')->group(function () {
         Route::post('/search-barcode', [PosController::class, 'searchByBarcode'])->name('search-barcode');
         Route::post('/add-to-cart', [PosController::class, 'addToCart'])->name('add-to-cart');
         Route::post('/update-cart-item', [PosController::class, 'updateCartItem'])->name('update-cart-item');
-        Route::post('/update-cart-price', [PosController::class, 'updateCartPrice'])->name('update-cart-price');
         Route::post('/apply-discount', [PosController::class, 'applyDiscount'])->name('apply-discount');
         Route::post('/remove-from-cart', [PosController::class, 'removeFromCart'])->name('remove-from-cart');
         Route::post('/clear-cart', [PosController::class, 'clearCart'])->name('clear-cart');

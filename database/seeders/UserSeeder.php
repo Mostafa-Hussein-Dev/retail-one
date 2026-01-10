@@ -23,6 +23,14 @@ class UserSeeder extends Seeder
             'is_active' => true,
         ]);
 
+        User::create([
+            'name' => 'Cashier',
+            'username' => 'cashier',
+            'password' => Hash::make('cashier123'),
+            'role' => 'cashier',
+            'is_active' => true,
+        ]);
+
         $this->command->info('Default manager user created successfully!');
         $this->command->line('Manager: admin / 123456');
     }

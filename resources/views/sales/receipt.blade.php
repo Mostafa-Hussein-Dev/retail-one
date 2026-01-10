@@ -324,12 +324,12 @@
 
         <div class="total-line">
             <span>In LBP:</span>
-            <span>LL {{ number_format($sale->total_amount * 89500, 0) }}</span>
+            <span>{{ number_format($sale->total_amount * 89500, 0) }} ل.ل.</span>
         </div>
     </div>
 
     <!-- Notes -->
-    @if($sale->notes && !str_contains($sale->notes, 'VOIDED'))
+    @if($sale->notes && !$sale->is_voided)
         <div style="margin: 5px 0; font-size: 8px; border: 1px solid #ccc; padding: 2px;">
             <strong>Notes:</strong><br>
             {{ $sale->notes }}
@@ -372,7 +372,7 @@
     </div>
 
     <!-- Void Stamp -->
-    @if(str_contains($sale->notes ?? '', 'VOIDED'))
+    @if($sale->is_voided)
         <div style="position: relative; height: 40px;">
             <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); border: 2px solid #e74c3c; background: rgba(231, 76, 60, 0.1); padding: 5px 10px; font-size: 10px; font-weight: bold; color: #e74c3c; text-align: center;">
                 VOID

@@ -57,18 +57,22 @@ class SaleController extends Controller
         $customers = Customer::active()->get();
         $users = auth()->user()->role === 'manager' ? User::active()->get() : collect();
 
-        // Calculate totals for current filtered results
-        $totalAmount = $query->sum('total_amount');
-        $totalProfit = $query->get()->sum(function ($sale) {
+        // Calculate totals for current filtered results (exclude voided from statistics)
+        $totalSalesCount = (clone $query)->notVoided()->count();
+        $totalAmount = (clone $query)->notVoided()->sum('total_amount');
+        $totalProfit = (clone $query)->notVoided()->get()->sum(function ($sale) {
             return $sale->saleItems->sum('profit');
         });
+        $voidedSalesCount = (clone $query)->where('is_voided', true)->count();
 
         return view('sales.index', compact(
             'sales',
             'customers',
             'users',
+            'totalSalesCount',
             'totalAmount',
-            'totalProfit'
+            'totalProfit',
+            'voidedSalesCount'
         ));
     }
 
@@ -110,9 +114,9 @@ class SaleController extends Controller
         $user = auth()->user();
 
         if ($user->role === 'cashier') {
-            $sales = Sale::today()->byUser($user->id)->get();
+            $sales = Sale::today()->byUser($user->id)->notVoided()->get();
         } else {
-            $sales = Sale::today()->get();
+            $sales = Sale::today()->notVoided()->get();
         }
 
         $summary = [
@@ -163,7 +167,7 @@ class SaleController extends Controller
             $query->where('user_id', auth()->id());
         }
 
-        $sales = $query->with('saleItems')->get();
+        $sales = $query->notVoided()->with('saleItems')->get();
 
         $analytics = [
             'total_sales' => $sales->count(),
@@ -221,10 +225,12 @@ class SaleController extends Controller
                 $sale->customer->decrement('total_debt', $sale->debt_amount);
             }
 
-            // Mark as voided (we don't delete, just mark)
+            // Mark as voided using dedicated fields
             $sale->update([
-                'notes' => ($sale->notes ? $sale->notes . "\n" : '') .
-                    "VOIDED: " . $request->reason . " by " . auth()->user()->name
+                'is_voided' => true,
+                'void_reason' => $request->reason,
+                'voided_by' => auth()->id(),
+                'voided_at' => now(),
             ]);
 
             \DB::commit();

@@ -73,9 +73,32 @@
                 </div>
 
                 <div style="text-align: center; margin-top: 1rem;">
-                    @if(str_contains($sale->notes ?? '', 'VOIDED'))
+                    @if($sale->is_voided)
                         <div style="background: #fdeaea; border: 1px solid #e74c3c; padding: 1rem; border-radius: 6px; border-left: 4px solid #e74c3c;">
                             <strong style="color: #c0392b;">تم إلغاء هذا البيع</strong>
+                            @if($sale->void_reason || $sale->voidedBy || $sale->voided_at)
+                                <div style="font-size: 0.85rem; color: #c0392b; margin-top: 0.5rem;">
+                                    @if($sale->void_reason)
+                                        السبب: {{ $sale->void_reason }}
+                                    @endif
+
+                                    @if($sale->void_reason && ($sale->voidedBy || $sale->voided_at))
+                                        |
+                                    @endif
+
+                                    @if($sale->voidedBy)
+                                        بواسطة: {{ $sale->voidedBy->name }}
+                                    @endif
+
+                                    @if($sale->voidedBy && $sale->voided_at)
+                                        |
+                                    @endif
+
+                                    @if($sale->voided_at)
+                                        عند: {{ $sale->voided_at->format('H:i:s Y-m-d') }}
+                                    @endif
+                                </div>
+                            @endif
                         </div>
                     @elseif($sale->payment_method === 'debt' && $sale->debt_amount > 0)
                         <div style="background: #fdf7e8; border: 1px solid #f39c12; padding: 1rem; border-radius: 6px; border-left: 4px solid #f39c12;">
@@ -101,8 +124,8 @@
                 <th style="text-align: center; vertical-align: middle;">المنتج</th>
                 <th style="text-align: center; vertical-align: middle;">الفئة</th>
                 <th style="text-align: center; vertical-align: middle;">الكمية</th>
-                <th style="text-align: center; vertical-align: middle;">السعر الأصلي</th>
-                <th style="text-align: center; vertical-align: middle;">السعر النهائي</th>
+                <th style="text-align: center; vertical-align: middle;">سعر الوحدة</th>
+                <th style="text-align: center; vertical-align: middle;">المجموع الفرعي</th>
                 <th style="text-align: center; vertical-align: middle;">الخصم</th>
                 <th style="text-align: center; vertical-align: middle;">الإجمالي</th>
                 @if(auth()->user()->role === 'manager')
@@ -133,13 +156,15 @@
                         <div style="font-size: 0.85rem; color: #7f8c8d;">{{ $item->product->unit_display }}</div>
                     </td>
                     <td style="text-align: center; vertical-align: middle;">
-                        ${{ number_format($item->product->selling_price, 2) }}
+                        <strong>${{ number_format($item->unit_price, 2) }}</strong>
+                        <div style="font-size: 0.85rem; color: #7f8c8d;">{{ number_format($item->unit_price * 89500) }} ل.ل.</div>
                     </td>
                     <td style="text-align: center; vertical-align: middle;">
-                        <strong>${{ number_format($item->unit_price, 2) }}</strong>
-                        @if($item->unit_price != $item->product->selling_price)
-                            <div style="font-size: 0.8rem; color: #f39c12;">معدل</div>
-                        @endif
+                        @php
+                            $subtotal = $item->unit_price * $item->quantity;
+                        @endphp
+                        <strong>${{ number_format($subtotal, 2) }}</strong>
+                        <div style="font-size: 0.85rem; color: #7f8c8d;">{{ number_format($subtotal * 89500) }} ل.ل.</div>
                     </td>
                     <td style="text-align: center; vertical-align: middle;">
                         @if($item->discount_amount > 0)
@@ -156,7 +181,7 @@
                     <td style="text-align: center; vertical-align: middle;">
                         <strong>${{ number_format($item->total_price, 2) }}</strong>
                         <div style="font-size: 0.8rem; color: #7f8c8d;">
-                            LL {{ number_format($item->total_price * 89500) }}
+                            {{ number_format($item->total_price * 89500) }} ل.ل.
                         </div>
                     </td>
                     @if(auth()->user()->role === 'manager')
@@ -182,15 +207,17 @@
         <div class="card" style="text-align: center;">
             <h3 style="color: #1abc9c; margin-bottom: 1rem;">الملخص المالي</h3>
             @if($sale->discount_amount > 0)
-                <div style="margin-bottom: 0.75rem; color: #f39c12;">
-                    <strong>إجمالي الخصم:</strong><br> ${{ number_format($sale->discount_amount, 2) }}
+                <div style="margin-bottom: 0.75rem; color: #e74c3c;">
+                    <strong>إجمالي الخصم:</strong><br>
+                    ${{ number_format($sale->discount_amount, 2) }}
                 </div>
             @endif
             <div style="font-size: 1.5rem; font-weight: bold; color: #1abc9c; padding-top: 0.5rem;">
-                <strong>الإجمالي النهائي:</strong><br> ${{ number_format($sale->total_amount, 2) }}
+                <strong>الإجمالي النهائي:</strong><br>
+                ${{ number_format($sale->total_amount, 2) }}
             </div>
             <div style="color: #7f8c8d; font-size: 0.9rem; margin-top: 0.5rem;">
-                 {{ number_format($sale->total_amount * 89500) }} ل.ل.
+                {{ number_format($sale->total_amount * 89500) }} ل.ل.
             </div>
         </div>
 
@@ -206,7 +233,7 @@
                     ${{ number_format($totalProfit, 2) }}
                 </div>
                 <div style="color: #7f8c8d; margin-bottom: 1rem;">
-                    LL {{ number_format($totalProfit * 89500) }}
+                    {{ number_format($totalProfit * 89500) }} ل.ل.
                 </div>
                 <div style="background: #f8f9fa; padding: 0.5rem; border-radius: 4px; border: 1px solid #eee;">
                     <strong>هامش الربح:</strong> {{ number_format($profitMargin, 1) }}%
@@ -217,7 +244,11 @@
         <!-- Sale Statistics -->
         <div class="card" style="text-align: center;">
             <h3 style="color: #1abc9c; margin-bottom: 1rem;">إحصائيات البيع</h3>
-            <div style="margin-bottom: 0.5rem;">
+            <div style="margin-bottom: 0.75rem;">
+                <strong>المجموع الفرعي:</strong><br>
+                <span style="font-size: 1.2rem; color: #2c3e50;">${{ number_format($sale->subtotal, 2) }}</span>
+            </div>
+            <div style="margin-bottom: 0.75rem;">
                 <strong>عدد الأصناف:</strong> {{ $sale->saleItems->count() }}
             </div>
             <div>
@@ -227,7 +258,7 @@
     </div>
 
     <!-- Action Buttons -->
-    @if(auth()->user()->role === 'manager' && !str_contains($sale->notes ?? '', 'VOIDED'))
+    @if(auth()->user()->role === 'manager' && !$sale->is_voided)
         <div class="card" style="text-align: center;">
             <h3 style="margin-bottom: 1.5rem; color: #2c3e50;">عمليات الإدارة</h3>
             <button onclick="voidSale({{ $sale->id }})"

@@ -113,6 +113,9 @@
                         ${{ number_format($totalProfit, 2) }}
                     </div>
                     <div style="color: #7f8c8d; font-size: 0.9rem;">
+                        {{ number_format($totalProfit * 89500) }} ل.ل.
+                    </div>
+                    <div style="color: #7f8c8d; font-size: 0.9rem;">
                         {{ $totalAmount > 0 ? number_format(($totalProfit / $totalAmount) * 100, 1) : 0 }}% هامش ربح
                     </div>
                 </div>
@@ -120,10 +123,13 @@
                 <div class="card" style="text-align: center;">
                     <h3 style="color: #1abc9c; margin-bottom: 0.5rem;">عدد المبيعات</h3>
                     <div style="font-size: 2rem; font-weight: bold; color: #1abc9c;">
-                        {{ $sales->total() }}
+                        {{ $totalSalesCount }}
                     </div>
                     <div style="color: #7f8c8d; font-size: 0.9rem;">
-                        {{ $sales->total() > 0 ? number_format($totalAmount / $sales->total(), 2) : 0 }}$ متوسط البيع
+                        {{ $totalSalesCount > 0 ? number_format($totalAmount / $totalSalesCount, 2) : 0 }}$ متوسط البيع
+                    </div>
+                    <div style="color: #7f8c8d; font-size: 0.85rem;">
+                        {{ $voidedSalesCount }} مبيعات ملغاة
                     </div>
                 </div>
             </div>
@@ -180,7 +186,7 @@
                             </span>
                         </td>
                         <td style="text-align: center; vertical-align: middle;">
-                            @if(str_contains($sale->notes ?? '', 'VOIDED'))
+                            @if($sale->is_voided)
                                 <span style="color: #e74c3c; padding: 6px 13px; border-radius: 6px; font-size: 0.85rem; font-weight: 1000; display: inline-flex; align-items: center; justify-content: center; min-width: 80px;">
                                     ملغي
                                 </span>

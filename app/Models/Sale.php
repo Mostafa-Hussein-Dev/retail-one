@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -21,20 +22,24 @@ class Sale extends Model
         'subtotal',
         'discount_amount',
         'total_amount',
-        'paid_amount',
         'debt_amount',
         'payment_method',
         'notes',
         'sale_date',
+        'is_voided',
+        'void_reason',
+        'voided_by',
+        'voided_at',
     ];
 
     protected $casts = [
         'subtotal' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
-        'paid_amount' => 'decimal:2',
         'debt_amount' => 'decimal:2',
         'sale_date' => 'datetime',
+        'is_voided' => 'boolean',
+        'voided_at' => 'datetime',
     ];
 
     protected $appends = [
@@ -53,6 +58,11 @@ class Sale extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function voidedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'voided_by');
     }
 
     public function items(): HasMany
@@ -102,6 +112,16 @@ class Sale extends Model
     public function scopeToday($query)
     {
         return $query->whereDate('sale_date', today());
+    }
+
+    public function scopeNotVoided($query)
+    {
+        return $query->where('is_voided', false);
+    }
+
+    public function scopeByUser($query, $userId)
+    {
+        return $query->where('user_id', $userId);
     }
 
     public function scopeThisMonth($query)
@@ -192,15 +212,22 @@ class Sale extends Model
 
     public function recalculateTotal(): void
     {
-        $this->subtotal = $this->items->sum('total_price');
+        // Calculate subtotal BEFORE discount
+        $this->subtotal = $this->items->sum(function($item) {
+            return $item->unit_price * $item->quantity;
+        });
+
+        // Sum up all discounts
+        $this->discount_amount = $this->items->sum('discount_amount');
+
+        // Calculate total AFTER discount
         $this->total_amount = $this->subtotal - $this->discount_amount;
 
-        // Update debt amount for debt sales
+        // Update debt amount based on payment method
         if ($this->payment_method === 'debt') {
             $this->debt_amount = $this->total_amount;
-            $this->paid_amount = 0.00;
         } else {
-            $this->debt_amount = max(0, $this->total_amount - $this->paid_amount);
+            $this->debt_amount = 0;
         }
 
         $this->save();
@@ -277,7 +304,6 @@ class Sale extends Model
             return false;
         }
 
-        $this->paid_amount += $amount;
         $this->debt_amount -= $amount;
         $this->save();
 
@@ -301,7 +327,7 @@ class Sale extends Model
     // Static Methods
     public static function todaysSales(): \Illuminate\Database\Eloquent\Collection
     {
-        return static::today()->with(['items.product', 'customer', 'user'])->get();
+        return static::today()->notVoided()->with(['items.product', 'customer', 'user'])->get();
     }
 
     public static function getTotalSalesAmount(string $period = 'today'): float
@@ -320,7 +346,7 @@ class Sale extends Model
                 break;
         }
 
-        return $query->sum('total_amount') ?? 0;
+        return $query->notVoided()->sum('total_amount') ?? 0;
     }
 
     public static function getTotalProfit(string $period = 'today'): float
@@ -339,7 +365,7 @@ class Sale extends Model
                 break;
         }
 
-        return $query->with('items')->get()->sum('total_profit') ?? 0;
+        return $query->notVoided()->with('items')->get()->sum('total_profit') ?? 0;
     }
 
     // Boot method

@@ -128,7 +128,7 @@ class PosController extends Controller
         }
 
         $quantity = $request->quantity;
-        $customPrice = $request->price ?? $product->selling_price;
+        $customPrice = $product->selling_price;
 
         // Check stock availability
         if ($quantity > $product->quantity) {
@@ -142,16 +142,27 @@ class PosController extends Controller
 
         // Check if product already in cart
         $existingIndex = null;
+        $existingQuantity = 0;
         foreach ($cart as $index => $item) {
             if ($item['product_id'] == $product->id && $item['unit_price'] == $customPrice) {
                 $existingIndex = $index;
+                $existingQuantity = $item['quantity'];
                 break;
             }
         }
 
+        // Check stock availability (existing in cart + new quantity)
+        $totalQuantity = $existingQuantity + $quantity;
+        if ($totalQuantity > $product->quantity) {
+            return response()->json([
+                'success' => false,
+                'message' => "الكمية المتوفرة: {$product->quantity} | لا يمكن إضافة {$quantity} أخرى"
+            ]);
+        }
+
         if ($existingIndex !== null) {
             // Update existing item
-            $cart[$existingIndex]['quantity'] += $quantity;
+            $cart[$existingIndex]['quantity'] = $totalQuantity;
             $cart[$existingIndex]['total_price'] = $cart[$existingIndex]['quantity'] * $cart[$existingIndex]['unit_price'];
         } else {
             // Add new item
@@ -414,24 +425,22 @@ class PosController extends Controller
             $sale->sale_date = now();
 
             // Calculate totals
-            $subtotal = 0;
+            $subtotal = 0;  // Should be BEFORE discount
             $totalDiscount = 0;
 
             foreach ($cart as $item) {
-                $subtotal += $item['total_price'];
+                $subtotal += ($item['unit_price'] * $item['quantity']);
                 $totalDiscount += $item['discount_amount'];
             }
 
-            $sale->subtotal = $subtotal;
+            $sale->subtotal = $subtotal;  // Amount BEFORE discount
             $sale->discount_amount = $totalDiscount;
-            $sale->total_amount = $subtotal;
+            $sale->total_amount = $subtotal - $totalDiscount;
 
             if ($request->payment_method === 'cash') {
-                $sale->paid_amount = $request->total_amount;
-                $sale->debt_amount = 0;
+                $sale->debt_amount = 0; // Cash = paid in full
             } else {
-                $sale->paid_amount = 0;
-                $sale->debt_amount = $sale->total_amount;
+                $sale->debt_amount = $sale->total_amount; // Debt = all owed
             }
 
             $sale->save();
@@ -484,11 +493,17 @@ class PosController extends Controller
     {
         $cart = Session::get('pos_cart', []);
 
+        // Calculate subtotal BEFORE discount
+        $subtotalBeforeDiscount = 0;
+        foreach ($cart as $item) {
+            $subtotalBeforeDiscount += ($item['unit_price'] * $item['quantity']);
+        }
+
         $summary = [
             'items' => $cart,
             'items_count' => count($cart),
             'total_quantity' => array_sum(array_column($cart, 'quantity')),
-            'subtotal' => array_sum(array_column($cart, 'total_price')),
+            'subtotal' => $subtotalBeforeDiscount,
             'total_discount' => array_sum(array_column($cart, 'discount_amount')),
             'total' => array_sum(array_column($cart, 'total_price')),
         ];
