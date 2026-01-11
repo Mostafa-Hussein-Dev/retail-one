@@ -3,8 +3,9 @@
 
 # Stage 1: Dependencies
 FROM composer:2.8 AS vendor
+WORKDIR /app
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-scripts --prefer-dist --optimize-autoloader --no-interaction
+RUN composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 
 # Stage 2: Frontend Build
 FROM node:22-alpine AS frontend
@@ -25,6 +26,7 @@ RUN apk add --no-cache \
     zip \
     unzip \
     git \
+    gettext \
     oniguruma-dev \
     libzip-dev \
     libpng-dev \
@@ -39,7 +41,7 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     gd \
     mbstring \
     pdo \
-    pdo_mysql \
+    pdo_pgsql \
     zip
 
 # Install Redis extension (optional, for caching/sessions)
@@ -66,7 +68,7 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/bootstrap/cache
 
 # Copy configuration files
-COPY docker/nginx.conf /etc/nginx/http.d/default.conf
+COPY docker/nginx.conf.template /etc/nginx/http.d/default.conf.template
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
@@ -75,23 +77,9 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # Expose port 80 (Render will route to this)
 EXPOSE 80
 
-# Set environment variables for Laravel
-ENV APP_ENV=production
-ENV APP_DEBUG=false
-ENV APP_KEY=${APP_KEY}
-ENV DB_CONNECTION=mysql
-ENV DB_HOST=${DB_HOST}
-ENV DB_PORT=${DB_PORT:-3306}
-ENV DB_DATABASE=${DB_DATABASE}
-ENV DB_USERNAME=${DB_USERNAME}
-ENV DB_PASSWORD=${DB_PASSWORD}
-ENV CACHE_DRIVER=redis
-ENV SESSION_DRIVER=redis
-ENV QUEUE_CONNECTION=redis
-
 # Health check for Render
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost/ || exit 1
+    CMD curl -f http://localhost:${PORT:-10000}/ || exit 1
 
 # Start supervisord to run both PHP-FPM and Nginx
 ENTRYPOINT ["docker-entrypoint.sh"]

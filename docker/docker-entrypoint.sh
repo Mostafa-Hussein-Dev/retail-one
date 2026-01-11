@@ -1,6 +1,19 @@
 #!/bin/sh
 set -e
 
+# Set default PORT if not provided (Render provides this)
+if [ -z "${PORT}" ]; then
+  export PORT=10000
+fi
+
+# Render nginx template with envsubst using $PORT
+if [ -f /etc/nginx/http.d/default.conf.template ]; then
+  envsubst '${PORT}' < /etc/nginx/http.d/default.conf.template > /etc/nginx/http.d/default.conf
+else
+  echo "Missing /etc/nginx/http.d/default.conf.template"
+  exit 1
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -9,11 +22,10 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}Starting Docker Entrypoint for Laravel POS${NC}"
 
-# Check if APP_KEY is set
-if [ -z "$APP_KEY" ]; then
-    echo -e "${YELLOW}APP_KEY not set, generating...${NC}"
-    php artisan key:generate --force
-    export APP_KEY=$(grep APP_KEY .env | cut -d '=' -f2)
+# Fail fast if APP_KEY is missing (DO NOT auto-generate)
+if [ -z "${APP_KEY}" ]; then
+  echo "APP_KEY is not set. Configure APP_KEY in Render environment variables."
+  exit 1
 fi
 
 # Create necessary directories
@@ -31,7 +43,6 @@ chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 # Clear and cache config
 echo -e "${GREEN}Optimizing application...${NC}"
-php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
@@ -72,5 +83,5 @@ fi
 
 echo -e "${GREEN}Entrypoint complete. Starting application...${NC}"
 
-# Execute the main command
-exec "$@"
+# Execute supervisord
+exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
