@@ -1,24 +1,45 @@
-# Dockerfile for Laravel POS on Render
-# Multi-stage build for optimized image size
-
-# Stage 1: Dependencies
+# ======================================================
+# Stage 1: PHP Dependencies (Composer)
+# ======================================================
 FROM composer:2.8 AS vendor
+
+# Install system deps required for PHP extensions
+RUN apk add --no-cache \
+    freetype-dev \
+    libjpeg-turbo-dev \
+    libpng-dev \
+    libzip-dev \
+    oniguruma-dev \
+    $PHPIZE_DEPS
+
+# Build required PHP extensions for Composer platform checks
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+ && docker-php-ext-install gd zip
+
 WORKDIR /app
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 
-# Stage 2: Frontend Build
+
+# ======================================================
+# Stage 2: Frontend Build (Vite / npm)
+# ======================================================
 FROM node:22-alpine AS frontend
+
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
+
 COPY . .
 RUN npm run build
 
-# Stage 3: Application
+
+# ======================================================
+# Stage 3: Application Runtime (PHP + nginx)
+# ======================================================
 FROM php:8.2-fpm-alpine AS application
 
-# Install system dependencies
+# Install system packages
 RUN apk add --no-cache \
     nginx \
     supervisor \
@@ -35,7 +56,7 @@ RUN apk add --no-cache \
 
 # Install PHP extensions
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
+ && docker-php-ext-install -j$(nproc) \
     bcmath \
     exif \
     gd \
@@ -44,43 +65,41 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     pdo_pgsql \
     zip
 
-# Install Redis extension (optional, for caching/sessions)
+# (Optional) Redis extension
 RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
-    && pecl install redis \
-    && docker-php-ext-enable redis \
-    && apk del .build-deps
+ && pecl install redis \
+ && docker-php-ext-enable redis \
+ && apk del .build-deps
 
-# Create application directory
+# App directory
 WORKDIR /var/www/html
 
-# Copy application files
+# Copy application source
 COPY . .
 
-# Copy vendor dependencies from Stage 1
-COPY --from=vendor /app/vendor/ ./vendor/
+# Copy PHP dependencies
+COPY --from=vendor /app/vendor ./vendor
 
-# Copy built frontend assets from Stage 2
+# Copy built frontend assets
 COPY --from=frontend /app/public/build ./public/build
 
-# Set permissions
+# Permissions
 RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html/storage \
-    && chmod -R 755 /var/www/html/bootstrap/cache
+ && chmod -R 755 /var/www/html/storage \
+ && chmod -R 755 /var/www/html/bootstrap/cache
 
-# Copy configuration files
+# nginx + supervisor config
 COPY docker/nginx.conf.template /etc/nginx/http.d/default.conf.template
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Expose port 80 (Render will route to this)
-EXPOSE 80
+# Render ignores EXPOSE, but keep for clarity
+EXPOSE 10000
 
-# Health check for Render
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-10000}/ || exit 1
+  CMD curl -f http://localhost:${PORT:-10000}/ || exit 1
 
-# Start supervisord to run both PHP-FPM and Nginx
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["supervisord", "-n", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
