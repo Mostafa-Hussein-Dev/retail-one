@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerDebtController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\DashboardController;
@@ -63,4 +65,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/sales/analytics', [SaleController::class, 'analytics'])->name('sales.analytics');
     Route::post('/sales/{sale}/void', [SaleController::class, 'void'])->name('sales.void');
     Route::get('/sales/export', [SaleController::class, 'export'])->name('sales.export');
+    Route::post('/sales/lookup-payment', [SaleController::class, 'lookupPayment'])->name('sales.lookup-payment');
+
+    // Customer Management Routes
+    Route::resource('customers', CustomerController::class);
+    Route::post('/customers/{customer}/toggle-status', [CustomerController::class, 'toggleStatus'])->name('customers.toggle-status');
+
+
+    // Customer Debt & Payment Routes
+    Route::get('/customers/{customer}/sales/{sale}/payment', [CustomerDebtController::class, 'showPaymentForm'])->name('debt.payment-form');
+    Route::post('/customers/{customer}/sales/{sale}/payment', [CustomerDebtController::class, 'recordPayment'])->name('debt.record-payment');
 });

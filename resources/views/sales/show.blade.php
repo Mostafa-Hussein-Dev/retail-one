@@ -5,13 +5,7 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
         <h1>تفاصيل البيع</h1>
         <div style="display: flex; gap: 1rem;">
-            <a href="{{ route('sales.receipt', $sale) }}"
-               target="_blank"
-               style="display: inline-block; background-color: transparent; color: #3498db; padding: 12px 100px; border: 2px solid #3498db; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; text-decoration: none; text-align: center; transition: all 0.3s ease; line-height: normal;"
-               onmouseover="this.style.backgroundColor='rgba(52, 152, 219, 0.1)'"
-               onmouseout="this.style.backgroundColor='transparent'">
-                طباعة الإيصال
-            </a>
+
             <a href="{{ route('sales.index') }}"
                style="display: inline-block; background-color: transparent; color: #1abc9c; padding: 12px 100px; border: 2px solid #1abc9c; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; text-decoration: none; text-align: center; transition: all 0.3s ease; line-height: normal;"
                onmouseover="this.style.backgroundColor='rgba(26, 188, 156, 0.1)'"
@@ -101,8 +95,15 @@
                             @endif
                         </div>
                     @elseif($sale->payment_method === 'debt' && $sale->debt_amount > 0)
+                        @php
+                            $paidAmount = $sale->getTotalPaid();
+                        @endphp
                         <div style="background: #fdf7e8; border: 1px solid #f39c12; padding: 1rem; border-radius: 6px; border-left: 4px solid #f39c12;">
-                            <strong style="color: #856404;">دين مستحق: ${{ number_format($sale->debt_amount, 2) }}</strong>
+                            @if($paidAmount > 0)
+                                <strong style="color: #856404;">دين مستحق: ${{ number_format($sale->total_amount, 2) }} (الباقي: {{ number_format($sale->debt_amount, 2) }}$)</strong>
+                            @else
+                                <strong style="color: #856404;">دين مستحق: ${{ number_format($sale->debt_amount, 2) }}</strong>
+                            @endif
                         </div>
                     @else
                         <div style="background: #e8f5e8; border: 1px solid #27ae60; padding: 1rem; border-radius: 6px; border-left: 4px solid #27ae60;">
@@ -257,10 +258,89 @@
         </div>
     </div>
 
+    <!-- Payment Transactions (for debt sales) -->
+    @if($sale->payment_method === 'debt' && $sale->customer && $sale->debtTransactions()->count() > 0)
+        <div class="card" style="margin-bottom: 2rem;">
+            <h3 style="margin-bottom: 1.5rem; color: #2c3e50;">سجل المدفوعات</h3>
+
+            <table class="table">
+                <thead>
+                <tr>
+                    <th style="text-align: center; vertical-align: middle;">التاريخ والوقت</th>
+                    <th style="text-align: center; vertical-align: middle;">نوع المعاملة</th>
+                    <th style="text-align: center; vertical-align: middle;">المبلغ</th>
+                </tr>
+                </thead>
+                <tbody>
+                @php
+                    $transactions = $sale->debtTransactions()->orderBy('created_at', 'asc')->get();
+                @endphp
+                @foreach($transactions as $transaction)
+                    @if(!$transaction->isVoided())
+                        <tr>
+                            <td style="text-align: center; vertical-align: middle;">
+                                {{ $transaction->created_at->format('Y-m-d H:i') }}
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                <span class="badge" style="background: {{ $transaction->getTypeColor() }}; color: white; padding: 6px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; min-width: 120px;">
+                                    {{ $transaction->getTypeText() }}
+                                </span>
+                            </td>
+                            <td style="text-align: center; vertical-align: middle;">
+                                <span style="color: {{ $transaction->amount > 0 ? '#e74c3c' : '#27ae60' }}; font-weight: 600;">
+                                    ${{ number_format(abs($transaction->amount), 2) }}
+                                </span>
+                            </td>
+                        </tr>
+                    @endif
+                @endforeach
+                @if($sale->debt_amount > 0)
+                    <tr style="background: #f8f9fa; font-weight: 600;">
+                        <td colspan="2" style="text-align: center; vertical-align: middle; padding: 1rem;">
+                            المتبقي:
+                        </td>
+                        <td style="text-align: center; vertical-align: middle; padding: 1rem;">
+                            <span style="color: #e74c3c; font-size: 1.1rem;">
+                                ${{ number_format($sale->debt_amount, 2) }}
+                            </span>
+                        </td>
+                    </tr>
+                @else
+                    <tr style="background: #e8f5e8; font-weight: 600;">
+                        <td colspan="2" style="text-align: center; vertical-align: middle; padding: 1rem;">
+                            تم السداد بالكامل:
+                        </td>
+                        <td style="text-align: center; vertical-align: middle; padding: 1rem;">
+                            <span style="color: #27ae60; font-size: 1.1rem;">
+                                $0.00
+                            </span>
+                        </td>
+                    </tr>
+                @endif
+                </tbody>
+            </table>
+        </div>
+    @endif
+
     <!-- Action Buttons -->
     @if(auth()->user()->role === 'manager' && !$sale->is_voided)
         <div class="card" style="text-align: center;">
             <h3 style="margin-bottom: 1.5rem; color: #2c3e50;">عمليات الإدارة</h3>
+            <a href="{{ route('sales.receipt', $sale) }}"
+               target="_blank"
+               style="display: inline-block; background-color: transparent; color: #3498db; padding: 12px 100px; border: 2px solid #3498db; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; text-decoration: none; text-align: center; transition: all 0.3s ease; line-height: normal;"
+               onmouseover="this.style.backgroundColor='rgba(52, 152, 219, 0.1)'"
+               onmouseout="this.style.backgroundColor='transparent'">
+                طباعة الإيصال
+            </a>
+            @if($sale->payment_method === 'debt' && $sale->debt_amount > 0 && $sale->customer)
+                <a href="{{ route('debt.payment-form', [$sale->customer, $sale]) }}"
+                   style="display: inline-block; background-color: transparent; color: #27ae60; padding: 12px 100px; border: 2px solid #27ae60; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; text-decoration: none; text-align: center; transition: all 0.3s ease; line-height: normal;"
+                   onmouseover="this.style.backgroundColor='rgba(39, 174, 96, 0.1)'"
+                   onmouseout="this.style.backgroundColor='transparent'">
+                    تسجيل دفعة
+                </a>
+            @endif
             <button onclick="voidSale({{ $sale->id }})"
                     style="background-color: transparent; color: #e74c3c; padding: 12px 100px; border: 2px solid #e74c3c; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; transition: all 0.3s ease;"
                     onmouseover="this.style.backgroundColor='rgba(231, 76, 60, 0.1)'"

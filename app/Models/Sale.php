@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -83,6 +82,12 @@ class Sale extends Model
     public function debtTransaction(): HasOne
     {
         return $this->hasOne(CustomerDebtTransaction::class);
+    }
+
+    // ===== PHASE 4 UPDATE =====
+    public function debtTransactions(): HasMany
+    {
+        return $this->hasMany(CustomerDebtTransaction::class);
     }
 
     // Accessors
@@ -212,18 +217,13 @@ class Sale extends Model
 
     public function recalculateTotal(): void
     {
-        // Calculate subtotal BEFORE discount
         $this->subtotal = $this->items->sum(function($item) {
             return $item->unit_price * $item->quantity;
         });
 
-        // Sum up all discounts
         $this->discount_amount = $this->items->sum('discount_amount');
-
-        // Calculate total AFTER discount
         $this->total_amount = $this->subtotal - $this->discount_amount;
 
-        // Update debt amount based on payment method
         if ($this->payment_method === 'debt') {
             $this->debt_amount = $this->total_amount;
         } else {
@@ -237,7 +237,6 @@ class Sale extends Model
     {
         try {
             DB::transaction(function () {
-                // Reduce stock for all items
                 foreach ($this->items as $item) {
                     $product = $item->product;
                     if (!$product->reduceStock($item->quantity)) {
@@ -245,7 +244,6 @@ class Sale extends Model
                     }
                 }
 
-                // Create debt transaction if needed
                 if ($this->debt_amount > 0 && $this->customer_id) {
                     CustomerDebtTransaction::create([
                         'customer_id' => $this->customer_id,
@@ -254,9 +252,6 @@ class Sale extends Model
                         'amount' => $this->debt_amount,
                         'description' => "Sale debt - Receipt #{$this->receipt_number}",
                     ]);
-
-                    // Update customer total debt
-                    $this->customer->increment('total_debt', $this->debt_amount);
                 }
 
                 $this->sale_date = now();
@@ -307,21 +302,79 @@ class Sale extends Model
         $this->debt_amount -= $amount;
         $this->save();
 
-        // Create payment transaction
         if ($this->customer_id) {
             CustomerDebtTransaction::create([
                 'customer_id' => $this->customer_id,
                 'sale_id' => $this->id,
                 'transaction_type' => 'payment',
-                'amount' => $amount,
+                'amount' => -$amount, // Negative amount reduces debt
                 'description' => "Payment for Receipt #{$this->receipt_number}",
             ]);
-
-            // Update customer total debt
-            $this->customer->decrement('total_debt', $amount);
         }
 
         return true;
+    }
+
+    // ===== PHASE 4 NEW METHODS =====
+
+    /**
+     * Void this sale with transaction voiding
+     */
+    public function voidSale(string $reason, int $voidedBy): bool
+    {
+        if ($this->is_voided) {
+            Log::warning("Attempted to void already voided sale: {$this->id}");
+            return false;
+        }
+
+        try {
+            Log::info("Starting void for sale {$this->id}, receipt: {$this->receipt_number}, payment_method: {$this->payment_method}");
+            DB::beginTransaction();
+
+            // Restore stock
+            Log::info("Restoring stock for sale {$this->id}");
+            foreach ($this->saleItems as $item) {
+                Log::info("Restoring product {$item->product_id}: {$item->quantity} units");
+                $item->product->increment('quantity', $item->quantity);
+            }
+
+            // Mark all debt transactions as voided (they will be excluded from total_debt calculation)
+            $voidedCount = $this->debtTransactions()->update([
+                'voided_at' => now(),
+                'void_reason' => 'Voided Sale',
+            ]);
+            Log::info("Marked {$voidedCount} transactions as voided");
+
+            // Mark sale as voided
+            Log::info("Marking sale {$this->id} as voided");
+            $this->update([
+                'is_voided' => true,
+                'void_reason' => $reason,
+                'voided_by' => $voidedBy,
+                'voided_at' => now(),
+            ]);
+
+            DB::commit();
+            Log::info("Successfully voided sale {$this->id}");
+            return true;
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Sale void failed: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+            throw $e;
+        }
+    }
+
+    /**
+     * Get total paid from non-voided payments
+     */
+    public function getTotalPaid(): float
+    {
+        return abs($this->debtTransactions()
+            ->where('transaction_type', 'payment')
+            ->whereNull('voided_at')
+            ->sum('amount'));
     }
 
     // Static Methods

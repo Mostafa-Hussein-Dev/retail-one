@@ -413,6 +413,33 @@ class PosController extends Controller
             ]);
         }
 
+        // Check customer credit limit for debt sales
+        if ($request->payment_method === 'debt' && $request->customer_id) {
+            $customer = Customer::find($request->customer_id);
+
+            if (!$customer || !$customer->is_active) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'العميل غير موجود أو غير نشط'
+                ]);
+            }
+
+            // Calculate sale total
+            $saleTotal = 0;
+            foreach ($cart as $item) {
+                $saleTotal += $item['total_price'];
+            }
+
+            // Check if customer has enough credit limit
+            if (!$customer->canPurchaseAmount($saleTotal)) {
+                $availableCredit = $customer->credit_limit - $customer->total_debt;
+                return response()->json([
+                    'success' => false,
+                    'message' => "حد الائتمان غير كافٍ. المتاح: \${" . number_format($availableCredit, 2) . "، المطلوب: \${" . number_format($saleTotal, 2) . "}"
+                ]);
+            }
+        }
+
         try {
             DB::beginTransaction();
 
@@ -445,7 +472,7 @@ class PosController extends Controller
 
             $sale->save();
 
-            // Create sale items and reduce stock
+            // Create sale items
             foreach ($cart as $item) {
                 SaleItem::create([
                     'sale_id' => $sale->id,
@@ -458,11 +485,10 @@ class PosController extends Controller
                     'total_price' => $item['total_price'],
                     'profit' => ($item['unit_price'] - $item['unit_cost']) * $item['quantity'] - $item['discount_amount'],
                 ]);
-
-                // Reduce stock
-                $product = Product::find($item['product_id']);
-                $product->reduceStock($item['quantity']);
             }
+
+            // Complete the sale (reduces stock and creates debt transaction if applicable)
+            $sale->completeSale();
 
             DB::commit();
 

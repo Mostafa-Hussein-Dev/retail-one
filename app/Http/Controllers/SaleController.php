@@ -17,7 +17,6 @@ class SaleController extends Controller
     {
         $query = Sale::with(['customer', 'user', 'saleItems.product']);
 
-        // Date filter
         if ($request->filled('date_from') && $request->filled('date_to')) {
             $query->whereBetween('sale_date', [
                 $request->date_from . ' 00:00:00',
@@ -29,37 +28,38 @@ class SaleController extends Controller
             $query->whereDate('sale_date', '<=', $request->date_to);
         }
 
-        // Payment method filter
         if ($request->filled('payment_method')) {
             $query->where('payment_method', $request->payment_method);
         }
 
-        // Customer filter
         if ($request->filled('customer_id')) {
             $query->where('customer_id', $request->customer_id);
         }
 
-        // Cashier filter (managers can see all, cashiers see only their own)
         if ($request->filled('user_id') && auth()->user()->role === 'manager') {
             $query->where('user_id', $request->user_id);
         } elseif (auth()->user()->role === 'cashier') {
             $query->where('user_id', auth()->id());
         }
 
-        // Receipt number search
         if ($request->filled('receipt_number')) {
             $query->where('receipt_number', 'like', '%' . $request->receipt_number . '%');
         }
 
-        $sales = $query->latest('sale_date')->paginate(20);
+        $sales = $query->latest('sale_date')->paginate($request->get('per_page', 10));
 
-        // Get filters data
         $customers = Customer::active()->get();
         $users = auth()->user()->role === 'manager' ? User::active()->get() : collect();
 
-        // Calculate totals for current filtered results (exclude voided from statistics)
         $totalSalesCount = (clone $query)->notVoided()->count();
-        $totalAmount = (clone $query)->notVoided()->sum('total_amount');
+        $totalAmount = (clone $query)->notVoided()->get()->sum(function ($sale) {
+            // For cash sales: total_amount (fully paid)
+            // For debt sales: total_amount - debt_amount (amount actually received)
+            if ($sale->payment_method === 'debt') {
+                return $sale->total_amount - $sale->debt_amount;
+            }
+            return $sale->total_amount;
+        });
         $totalProfit = (clone $query)->notVoided()->get()->sum(function ($sale) {
             return $sale->saleItems->sum('profit');
         });
@@ -96,7 +96,6 @@ class SaleController extends Controller
      */
     public function receipt(Sale $sale)
     {
-        // Check permissions
         if (auth()->user()->role === 'cashier' && $sale->user_id !== auth()->id()) {
             abort(403, 'غير مسموح لك بعرض هذا الإيصال');
         }
@@ -162,7 +161,6 @@ class SaleController extends Controller
                 break;
         }
 
-        // Filter by user role
         if (auth()->user()->role === 'cashier') {
             $query->where('user_id', auth()->id());
         }
@@ -205,49 +203,41 @@ class SaleController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'غير مسموح لك بإلغاء المبيعات'
-            ]);
+            ], 403);
         }
 
         $request->validate([
             'reason' => 'required|string|max:500',
         ]);
 
-        try {
-            \DB::beginTransaction();
+        if ($sale->is_voided) {
+            return response()->json([
+                'success' => false,
+                'message' => 'هذا البيع ملغي بالفعل'
+            ], 400);
+        }
 
-            // Restore stock
-            foreach ($sale->saleItems as $item) {
-                $item->product->increaseStock($item->quantity);
+        // Get total paid before voiding
+        $totalPaid = $sale->getTotalPaid();
+
+        // Use new voidSale method
+        if ($sale->voidSale($request->reason, auth()->id())) {
+            $message = 'تم إلغاء البيع بنجاح';
+            if ($totalPaid > 0) {
+                $message .= ". يجب إرجاع مبلغ $" . number_format($totalPaid, 2) . " نقداً للعميل";
             }
-
-            // Remove debt if debt sale
-            if ($sale->payment_method === 'debt' && $sale->customer) {
-                $sale->customer->decrement('total_debt', $sale->debt_amount);
-            }
-
-            // Mark as voided using dedicated fields
-            $sale->update([
-                'is_voided' => true,
-                'void_reason' => $request->reason,
-                'voided_by' => auth()->id(),
-                'voided_at' => now(),
-            ]);
-
-            \DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => 'تم إلغاء البيع بنجاح'
-            ]);
-
-        } catch (\Exception $e) {
-            \DB::rollBack();
-
-            return response()->json([
-                'success' => false,
-                'message' => 'حدث خطأ أثناء إلغاء البيع'
+                'message' => $message,
+                'total_refund' => $totalPaid
             ]);
         }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'حدث خطأ أثناء إلغاء البيع'
+        ], 500);
     }
 
     /**
@@ -274,7 +264,6 @@ class SaleController extends Controller
             }
         }
 
-        // Sort by quantity and return top 5
         uasort($products, function ($a, $b) {
             return $b['quantity'] <=> $a['quantity'];
         });
@@ -311,11 +300,56 @@ class SaleController extends Controller
      */
     public function export(Request $request)
     {
-        // This would be implemented for CSV/Excel export
-        // For now, return a simple response
         return response()->json([
             'success' => false,
             'message' => 'التصدير غير متوفر حالياً'
         ]);
+    }
+
+    /**
+     * Lookup sale by barcode/receipt number for payment
+     */
+    public function lookupPayment(Request $request)
+    {
+        $request->validate([
+            'barcode' => 'required|string',
+        ]);
+
+        $barcode = trim($request->barcode);
+
+        // Find sale by receipt number
+        $sale = Sale::where('receipt_number', $barcode)->first();
+
+        if (!$sale) {
+            return redirect()->route('sales.index')
+                ->with('error', "لم يتم العثور على بيع بهذا الرقم: {$barcode}");
+        }
+
+        // Check if sale has a customer
+        if (!$sale->customer) {
+            return redirect()->route('sales.index')
+                ->with('error', "هذا البيع ({$barcode}) ليس مرتبطاً بأي عميل");
+        }
+
+        // Check if it's a debt sale
+        if ($sale->payment_method !== 'debt') {
+            return redirect()->route('sales.index')
+                ->with('error', "هذا البيع ({$barcode}) ليس بيع دين");
+        }
+
+        // Check if sale is voided
+        if ($sale->is_voided) {
+            return redirect()->route('sales.show', $sale)
+                ->with('error', "هذا البيع ({$barcode}) ملغي");
+        }
+
+        // Check if there's remaining debt
+        if ($sale->debt_amount <= 0) {
+            return redirect()->route('sales.show', $sale)
+                ->with('warning', "هذا البيع ({$barcode}) مدفوع بالكامل");
+        }
+
+        // Redirect to payment form
+        return redirect()->route('debt.payment-form', [$sale->customer, $sale]);
     }
 }

@@ -4,12 +4,22 @@
 
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
         <h1>إدارة المبيعات</h1>
-        <a href="{{ route('pos.index') }}"
-           style="display: inline-block; background-color: transparent; color: #1abc9c; padding: 12px 100px; border: 2px solid #1abc9c; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; text-decoration: none; text-align: center; transition: all 0.3s ease; line-height: normal;"
-           onmouseover="this.style.backgroundColor='rgba(26, 188, 156, 0.1)'"
-           onmouseout="this.style.backgroundColor='transparent'">
-            بيع جديد
-        </a>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <form method="POST" action="{{ route('sales.lookup-payment') }}" style="display: flex; gap: 0.5rem;">
+                @csrf
+                <input type="text"
+                       name="barcode"
+                       placeholder="مسح الباركود للدفع"
+                       style="padding: 12px 20px; border: 2px solid #27ae60; border-radius: 6px; font-size: 1rem; min-width: 250px; height: 49px; box-sizing: border-box;"
+                       autofocus>
+            </form>
+            <a href="{{ route('pos.index') }}"
+               style="display: inline-block; background-color: transparent; color: #1abc9c; padding: 12px 100px; border: 2px solid #1abc9c; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; text-decoration: none; text-align: center; transition: all 0.3s ease; line-height: normal; height: 49px; box-sizing: border-box;"
+               onmouseover="this.style.backgroundColor='rgba(26, 188, 156, 0.1)'"
+               onmouseout="this.style.backgroundColor='transparent'">
+                بيع جديد
+            </a>
+        </div>
     </div>
 
     <!-- Search and Filters -->
@@ -229,9 +239,7 @@
             </table>
 
             <!-- Pagination -->
-            <div style="margin-top: 2rem; display: flex; justify-content: center;">
-                {{ $sales->appends(request()->query())->links() }}
-            </div>
+            {{ $sales->appends(request()->except('per_page'))->links('pagination.material') }}
         @else
             <div style="text-align: center; padding: 3rem; color: #7f8c8d;">
                 <h2>لا توجد مبيعات</h2>

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Customer extends Model
 {
@@ -14,13 +15,11 @@ class Customer extends Model
         'name',
         'phone',
         'address',
-        'total_debt',
         'credit_limit',
         'is_active',
     ];
 
     protected $casts = [
-        'total_debt' => 'decimal:2',
         'credit_limit' => 'decimal:2',
         'is_active' => 'boolean',
     ];
@@ -34,17 +33,11 @@ class Customer extends Model
         'can_purchase_on_debt',
     ];
 
-    /**
-     * Get sales for this customer
-     */
     public function sales(): HasMany
     {
         return $this->hasMany(Sale::class);
     }
 
-    /**
-     * Get debt transactions for this customer
-     */
     public function debtTransactions(): HasMany
     {
         return $this->hasMany(CustomerDebtTransaction::class);
@@ -56,11 +49,24 @@ class Customer extends Model
         return $this->name . ($this->phone ? " ({$this->phone})" : '');
     }
 
+    /**
+     * Calculate total debt from transactions (not stored)
+     * Debt = sum of all non-voided transaction amounts
+     */
+    public function getTotalDebtAttribute(): float
+    {
+        // If the model was just loaded from DB and we want to avoid N+1 queries,
+        // we could cache this, but for now calculate fresh
+        return $this->debtTransactions()
+            ->whereNull('voided_at')
+            ->sum('amount') ?? 0;
+    }
+
     public function getDebtStatusAttribute(): string
     {
         if ($this->total_debt == 0) return 'no_debt';
         if ($this->total_debt > 0) return 'has_debt';
-        return 'credit_balance'; // Negative debt means customer has credit
+        return 'credit_balance';
     }
 
     public function getAvailableCreditAttribute(): float
@@ -101,12 +107,24 @@ class Customer extends Model
 
     public function scopeWithDebt($query)
     {
-        return $query->where('total_debt', '>', 0);
+        return $query->whereExists(function ($subquery) {
+            $subquery->select(DB::raw(1))
+                ->from('customer_debt_transactions')
+                ->whereColumn('customer_debt_transactions.customer_id', 'customers.id')
+                ->whereNull('voided_at')
+                ->havingRaw('SUM(amount) > 0');
+        });
     }
 
     public function scopeOverCreditLimit($query)
     {
-        return $query->whereRaw('total_debt > credit_limit');
+        return $query->whereExists(function ($subquery) {
+            $subquery->select(DB::raw(1))
+                ->from('customer_debt_transactions')
+                ->whereColumn('customer_debt_transactions.customer_id', 'customers.id')
+                ->whereNull('voided_at')
+                ->havingRaw('SUM(amount) > customers.credit_limit');
+        });
     }
 
     public function scopeSearch($query, string $search)
@@ -120,8 +138,6 @@ class Customer extends Model
     // Business Logic Methods
     public function addDebt(float $amount, string $description = null, int $saleId = null): void
     {
-        $this->increment('total_debt', $amount);
-
         $this->debtTransactions()->create([
             'sale_id' => $saleId,
             'transaction_type' => 'debt',
@@ -133,14 +149,12 @@ class Customer extends Model
     public function payDebt(float $amount, string $description = null): bool
     {
         if ($amount > $this->total_debt) {
-            return false; // Cannot pay more than owed
+            return false;
         }
-
-        $this->decrement('total_debt', $amount);
 
         $this->debtTransactions()->create([
             'transaction_type' => 'payment',
-            'amount' => $amount,
+            'amount' => -$amount, // Negative amount reduces debt
             'description' => $description,
         ]);
 
@@ -168,12 +182,12 @@ class Customer extends Model
     public function getLastSaleDate(): ?\Carbon\Carbon
     {
         $lastSale = $this->sales()->latest('sale_date')->first();
-        return $lastSale ? $lastSale->sale_date : null;
+        return $lastSale ?$lastSale->sale_date : null;
     }
 
     public function getDebtTransactionHistory(): \Illuminate\Database\Eloquent\Collection
     {
-        return $this->debtTransactions()->latest('transaction_date')->get();
+        return $this->debtTransactions()->latest('created_at')->get();
     }
 
     public function hasDebt(): bool
@@ -195,10 +209,10 @@ class Customer extends Model
     public function getDebtAging(): array
     {
         $aging = [
-            'current' => 0,      // 0-30 days
-            'overdue_30' => 0,   // 31-60 days
-            'overdue_60' => 0,   // 61-90 days
-            'overdue_90' => 0,   // 90+ days
+            'current' => 0,
+            'overdue_30' => 0,
+            'overdue_60' => 0,
+            'overdue_90' => 0,
         ];
 
         $debtSales = $this->sales()->where('debt_amount', '>', 0)->get();
@@ -224,7 +238,7 @@ class Customer extends Model
     {
         return $this->debtTransactions()
             ->where('transaction_type', 'payment')
-            ->latest('transaction_date')
+            ->latest('created_at')
             ->limit($limit)
             ->get();
     }
@@ -235,6 +249,44 @@ class Customer extends Model
         $salesCount = $this->getTotalSalesCount();
 
         return $salesCount > 0 ? $totalSales / $salesCount : 0;
+    }
+
+    // ===== PHASE 4 NEW METHODS =====
+
+    /**
+     * Get sales with outstanding debt (non-voided, debt_amount > 0)
+     */
+    public function getSalesWithDebt()
+    {
+        return $this->sales()
+            ->where('is_voided', false)
+            ->where('debt_amount', '>', 0)
+            ->orderBy('sale_date', 'desc')
+            ->get();
+    }
+
+    /**
+     * Get fully paid debt sales (non-voided, was debt sale, now debt_amount = 0)
+     */
+    public function getFullyPaidDebtSales()
+    {
+        return $this->sales()
+            ->where('is_voided', false)
+            ->where('payment_method', 'debt')
+            ->where('debt_amount', 0)
+            ->orderBy('sale_date', 'desc')
+            ->get();
+    }
+
+    /**
+     * Get transaction history ordered by date
+     */
+    public function getTransactionHistory()
+    {
+        return $this->debtTransactions()
+            ->with('sale')
+            ->orderBy('created_at', 'desc')
+            ->get();
     }
 
     // Static Methods
@@ -255,7 +307,9 @@ class Customer extends Model
 
     public static function getTotalDebtAmount(): float
     {
-        return static::sum('total_debt');
+        // Calculate from transactions instead of summing stored values
+        return CustomerDebtTransaction::whereNull('voided_at')
+            ->sum('amount') ?? 0;
     }
 
     public static function searchCustomers(string $search)
@@ -272,18 +326,8 @@ class Customer extends Model
             if (is_null($customer->is_active)) {
                 $customer->is_active = true;
             }
-            if (is_null($customer->total_debt)) {
-                $customer->total_debt = 0.00;
-            }
             if (is_null($customer->credit_limit)) {
-                $customer->credit_limit = 500.00; // Default credit limit
-            }
-        });
-
-        static::updating(function ($customer) {
-            // Ensure debt doesn't go below 0
-            if ($customer->total_debt < 0) {
-                $customer->total_debt = 0.00;
+                $customer->credit_limit = 500.00;
             }
         });
     }
