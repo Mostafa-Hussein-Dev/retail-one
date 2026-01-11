@@ -1,0 +1,68 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+docker/
+
+# Documentation
+README.md
+LICENSE
+*.md
+
+# IDE
+.idea
+.vscode
+*.code-workspace
+*.sublime-*
+
+# Dependencies (will be installed in container)
+node_modules
+vendor
+npm-debug.log
+yarn-error.log
+
+# Laravel
+/storage/*.key
+/storage/logs/*
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/bootstrap/cache/*
+
+# Environment (will be provided by Render)
+.env
+.env.backup
+.env.production
+.env.local
+
+# Testing
+/tests
+/phpunit.xml
+/.phpunit.result.cache
+
+# Build artifacts
+/public/hot
+/public/storage
+/public/build
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Misc
+.editorconfig
+.phpunit.result.cache
+.phpunit.cache
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+composer.phar
