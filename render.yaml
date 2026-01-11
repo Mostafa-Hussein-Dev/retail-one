@@ -1,0 +1,50 @@
+services:
+  # Web Service
+  - type: web
+    name: laravel-pos
+    env: docker
+    region: oregon
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+
+    # Environment Variables (set these in Render Dashboard)
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_KEY
+        generateValue: true
+      - key: DB_CONNECTION
+        value: mysql
+      - key: CACHE_DRIVER
+        value: file
+      - key: SESSION_DRIVER
+        value: file
+      - key: QUEUE_CONNECTION
+        value: sync
+
+    # Health Check
+    healthCheckPath: /
+
+# Database Service (Optional - if using Render's managed database)
+# Uncomment and configure if you want to use Render's MySQL
+# databases:
+#   - name: laravel-pos-db
+#     databaseName: pos_db
+#     user: pos_user
+#     plan: free
+#
+#     # MySQL 8
+#     version: "8.0"
+#
+#     # IP Allow List (optional)
+#     ipAllowList: []
+
+# Redis Service (Optional - for caching/sessions)
+# - type: redis
+#   name: laravel-pos-redis
+#   plan: free
+#   maxmemoryPolicy: allkeys-lru
+#   ipAllowList: []
