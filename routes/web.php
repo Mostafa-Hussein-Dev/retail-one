@@ -9,6 +9,9 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\SaleController;
+use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\PurchaseController;
+use App\Http\Controllers\SupplierDebtController;
 
 /*
 |--------------------------------------------------------------------------
@@ -75,4 +78,17 @@ Route::middleware('auth')->group(function () {
     // Customer Debt & Payment Routes
     Route::get('/customers/{customer}/sales/{sale}/payment', [CustomerDebtController::class, 'showPaymentForm'])->name('debt.payment-form');
     Route::post('/customers/{customer}/sales/{sale}/payment', [CustomerDebtController::class, 'recordPayment'])->name('debt.record-payment');
+
+    // ===== SUPPLIER MANAGEMENT ROUTES =====
+    Route::resource('suppliers', SupplierController::class);
+    Route::post('/suppliers/{supplier}/toggle-status', [SupplierController::class, 'toggleStatus'])->name('suppliers.toggle-status');
+
+    // ===== PURCHASE ROUTES =====
+    Route::resource('purchases', PurchaseController::class)->only(['index', 'create', 'store', 'show']);
+    Route::get('/purchases/{purchase}/receipt', [PurchaseController::class, 'receipt'])->name('purchases.receipt');
+    Route::post('/purchases/{purchase}/void', [PurchaseController::class, 'void'])->name('purchases.void');
+
+    // ===== SUPPLIER DEBT & PAYMENT ROUTES =====
+    Route::get('/suppliers/{supplier}/purchases/{purchase}/payment', [SupplierDebtController::class, 'showPaymentForm'])->name('supplier-debt.payment-form');
+    Route::post('/suppliers/{supplier}/purchases/{purchase}/payment', [SupplierDebtController::class, 'recordPayment'])->name('supplier-debt.record-payment');
 });

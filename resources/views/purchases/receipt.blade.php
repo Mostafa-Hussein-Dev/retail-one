@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap" rel="stylesheet">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Receipt - {{ $sale->receipt_number }}</title>
+    <title>Purchase Receipt - {{ $purchase->purchase_number }}</title>
     <style>
         * {
             box-sizing: border-box;
@@ -287,60 +287,64 @@
     <!-- Receipt Info -->
     <div class="receipt-info">
         <div class="receipt-line">
-            <span>Receipt No:</span>
-            <span>{{ $sale->receipt_number }}</span>
+            <span>Purchase No:</span>
+            <span>{{ $purchase->purchase_number }}</span>
         </div>
         <div class="receipt-line">
             <span>Date:</span>
-            <span>{{ $sale->sale_date->format('d/m/Y') }}</span>
+            <span>{{ $purchase->purchase_date->format('d/m/Y') }}</span>
         </div>
         <div class="receipt-line">
             <span>Time:</span>
-            <span>{{ $sale->sale_date->format('H:i:s') }}</span>
+            <span>{{ $purchase->purchase_date->format('H:i:s') }}</span>
         </div>
         <div class="receipt-line">
-            <span>Cashier:</span>
-            <span>{{ $sale->user->name }}</span>
+            <span>Received By:</span>
+            <span>{{ $purchase->user->name }}</span>
         </div>
-        @if($sale->is_voided)
+        @if($purchase->is_voided)
             <div class="receipt-line">
                 <span>Voided By:</span>
-                <span>{{ $sale->voidedBy->name }}</span>
+                <span>{{ $purchase->voidedBy->name }}</span>
             </div>
             <div class="receipt-line">
                 <span>Voided At:</span>
-                <span>{{ $sale->voided_at->format('d/m/Y H:i') }}</span>
+                <span>{{ $purchase->voided_at->format('d/m/Y H:i') }}</span>
             </div>
         @endif
-        @if($sale->customer)
+        <div class="receipt-line">
+            <span>Supplier:</span>
+            <span>{{ $purchase->supplier->name }}</span>
+        </div>
+        @if($purchase->supplier->contact_person)
             <div class="receipt-line">
-                <span>Customer:</span>
-                <span>{{ $sale->customer->name }}</span>
+                <span>Contact:</span>
+                <span>{{ $purchase->supplier->contact_person }}</span>
             </div>
         @endif
-        @if($sale->customer->phone)
+        @if($purchase->supplier->phone)
             <div class="receipt-line">
                 <span>Phone:</span>
-                <span>{{ $sale->customer->phone }}</span>
+                <span>{{ $purchase->supplier->phone }}</span>
             </div>
         @endif
     </div>
 
 
     <!-- Payment Method -->
-    @if($sale->is_voided)
+    @if($purchase->is_voided)
         <div class="void-notice">
-            *** SALE VOIDED ***
-            @if($sale->void_reason)
-                <div style="margin-top: 2px;">Reason: {{ $sale->void_reason }}</div>
+            *** PURCHASE VOIDED ***
+            @if($purchase->void_reason)
+                <div style="margin-top: 2px;">Reason: {{ $purchase->void_reason }}</div>
             @endif
         </div>
     @else
-        <div class="payment-method @if($sale->payment_method === 'cash') payment-cash @else payment-debt @endif">
-            @if($sale->payment_method === 'cash')
-                CASH SALE
+        <div class="payment-method @if($purchase->debt_amount == 0) payment-cash @else payment-debt @endif">
+            @if($purchase->debt_amount == 0)
+                CASH PURCHASE
             @else
-                DEBT SALE
+                DEBT PURCHASE
             @endif
         </div>
     @endif
@@ -354,27 +358,19 @@
         <div class="items-header">
             <span style="width: 12%; text-align: left;">QTY</span>
             <span style="width: 42%; text-align: left;">ITEM</span>
-            <span style="width: 23%; text-align: right;">PRICE</span>
+            <span style="width: 23%; text-align: right;">COST</span>
             <span style="width: 23%; text-align: right;">TOTAL</span>
         </div>
 
-        @foreach($sale->saleItems as $item)
+        @foreach($purchase->purchaseItems as $item)
             <div class="item">
                 <div class="item-name">{{ $item->product->name }}</div>
                 <div class="item-line">
                     <span style="width: 12%;">{{ number_format($item->quantity, 2) }}</span>
                     <span style="width: 42%;"></span>
-                    <span style="width: 23%; text-align: right;">${{ number_format($item->unit_price, 2) }}</span>
-                    <span style="width: 23%; text-align: right;">${{ number_format($item->total_price, 2) }}</span>
+                    <span style="width: 23%; text-align: right;">${{ number_format($item->unit_cost, 2) }}</span>
+                    <span style="width: 23%; text-align: right;">${{ number_format($item->total_cost, 2) }}</span>
                 </div>
-                @if($item->discount_amount > 0)
-                    <div class="item-line" style="font-size: 7px; color: #e74c3c;">
-                        <span style="width: 12%;"></span>
-                        <span style="width: 42%;">Discount</span>
-                        <span style="width: 23%; text-align: right;"></span>
-                        <span style="width: 23%; text-align: right;">-${{ number_format($item->discount_amount, 2) }}</span>
-                    </div>
-                @endif
             </div>
         @endforeach
     </div>
@@ -385,43 +381,37 @@
     <div class="totals-section">
         <div class="total-line">
             <span>Items Count:</span>
-            <span>{{ $sale->saleItems->count() }}</span>
+            <span>{{ $purchase->purchaseItems->count() }}</span>
         </div>
         <div class="total-line">
             <span>Total Quantity:</span>
-            <span>{{ number_format($sale->saleItems->sum('quantity'), 2) }}</span>
+            <span>{{ number_format($purchase->purchaseItems->sum('quantity'), 2) }}</span>
         </div>
-        <div class="total-line">
-            <span>Subtotal:</span>
-            <span>${{ number_format($sale->subtotal, 2) }}</span>
-        </div>
-        @if($sale->discount_amount > 0)
-            <div class="total-line">
-                <span>Total Discount:</span>
-                <span style="color: #e74c3c;">-${{ number_format($sale->discount_amount, 2) }}</span>
-            </div>
-        @endif
 
         <div class="final-total">
             <div style="display: flex; justify-content: space-between;">
                 <span>TOTAL:</span>
-                <span>${{ number_format($sale->total_amount, 2) }}</span>
+                <span>${{ number_format($purchase->total_amount, 2) }}</span>
             </div>
         </div>
 
         <div class="total-line">
             <span>In LBP:</span>
-            <span>{{ number_format($sale->total_amount * 89500, 0) }} ل.ل.</span>
+            <span>{{ number_format($purchase->total_amount * 89500, 0) }} ل.ل.</span>
         </div>
     </div>
 
     <!-- Payment Details -->
-    @if(!$sale->is_voided)
+    @if(!$purchase->is_voided)
         <div class="payment-section">
-            @if($sale->payment_method === 'cash')
+            @if($purchase->debt_amount == 0)
                 <div class="payment-line">
                     <span>Payment Method:</span>
                     <span>CASH</span>
+                </div>
+                <div class="payment-line">
+                    <span>Total Paid:</span>
+                    <span style="color: #27ae60; font-weight: bold;">${{ number_format($purchase->paid_amount, 2) }}</span>
                 </div>
             @else
                 <div class="payment-line">
@@ -430,21 +420,21 @@
                 </div>
                 <div class="payment-line">
                     <span>Total Paid:</span>
-                    <span>${{ number_format($sale->getTotalPaid(), 2) }}</span>
+                    <span>${{ number_format($purchase->paid_amount, 2) }}</span>
                 </div>
                 <div class="payment-line" style="font-weight: bold;">
                     <span>Balance Due:</span>
-                    <span>${{ number_format($sale->debt_amount, 2) }}</span>
+                    <span>${{ number_format($purchase->debt_amount, 2) }}</span>
                 </div>
             @endif
         </div>
     @endif
 
     <!-- Notes -->
-    @if($sale->notes && !$sale->is_voided)
+    @if($purchase->notes && !$purchase->is_voided)
         <div style="margin: 5px 0; font-size: 8px; border: 1px solid #ccc; padding: 4px;">
             <strong>Notes:</strong><br>
-            {{ $sale->notes }}
+            {{ $purchase->notes }}
         </div>
     @endif
 
@@ -452,10 +442,10 @@
 
     <!-- Thank You -->
     <div class="thank-you">
-        THANK YOU FOR SHOPPING
+        PURCHASE RECEIPT
     </div>
     <div class="text-center" style="font-size: 8px; margin-bottom: 8px;">
-        We appreciate your business
+        Supplier: {{ $purchase->supplier->name }}
     </div>
 
     <!-- Exchange Rate -->
@@ -467,11 +457,11 @@
     <div class="barcode-section">
         <div class="barcode-image" style="text-align: center;">
             <?php
-            $barcodeSvg = DNS1D::getBarcodeSVG($sale->receipt_number, 'C128', 1, 40, '#000', false);
+            $barcodeSvg = DNS1D::getBarcodeSVG($purchase->purchase_number, 'C128', 1, 40, '#000', false);
             echo $barcodeSvg;
             ?>
         </div>
-        <div class="barcode-number">{{ $sale->receipt_number }}</div>
+        <div class="barcode-number">{{ $purchase->purchase_number }}</div>
     </div>
 
     <!-- Footer -->

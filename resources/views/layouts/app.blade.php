@@ -21,8 +21,9 @@
                     <a href="{{ route('sales.index') }}" class="{{ request()->routeIs('sales.*') ? 'active' : '' }}">المبيعات</a>
                     <a href="{{ route('products.index') }}" class="{{ request()->routeIs('products.*') ? 'active' : '' }}">المنتجات</a>
                     <a href="{{ route('categories.index') }}" class="{{ request()->routeIs('categories.*') ? 'active' : '' }}">الفئات</a>
-                    <a href="{{ route('customers.index') }}" class="{{ request()->is('customers*') ? 'active' : '' }}">العملاء</a>
-                    <a href="#" class="{{ request()->is('suppliers*') ? 'active' : '' }}">الموردين</a>
+                    <a href="{{ route('customers.index') }}" class="{{ request()->routeIs('customers*') ? 'active' : '' }}">العملاء</a>
+                    <a href="{{ route('suppliers.index') }}" class="{{ request()->routeIs('suppliers*') ? 'active' : '' }}">الموردين</a>
+                    <a href="{{ route('purchases.index') }}" class="{{ request()->routeIs('purchases*') ? 'active' : '' }}">المشتريات</a>
                     <a href="#" class="{{ request()->is('returns*') ? 'active' : '' }}">المرتجعات</a>
                     <a href="#" class="{{ request()->is('reports*') ? 'active' : '' }}">التقارير</a>
                     <a href="#" class="{{ request()->is('settings*') ? 'active' : '' }}">الإعدادات</a>

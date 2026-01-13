@@ -165,6 +165,39 @@ class Supplier extends Model
         };
     }
 
+    // ===== PHASE 5 NEW METHODS =====
+
+    /**
+     * Get purchases with outstanding debt (non-voided, debt_amount > 0)
+     */
+    public function getPurchasesWithDebt()
+    {
+        return $this->purchases()
+            ->where('is_voided', false)
+            ->where('debt_amount', '>', 0)
+            ->orderBy('purchase_date', 'desc')
+            ->get();
+    }
+
+    /**
+     * Get transaction history ordered by date
+     */
+    public function getTransactionHistory()
+    {
+        return $this->debtTransactions()
+            ->with('purchase')
+            ->orderBy('created_at', 'desc')
+            ->get();
+    }
+
+    /**
+     * Get formatted debt amount
+     */
+    public function getFormattedDebt(): string
+    {
+        return '$' . number_format($this->total_debt, 2);
+    }
+
     // Static Methods
     public static function getActiveSuppliers()
     {
