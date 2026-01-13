@@ -116,9 +116,7 @@
             </table>
 
             <!-- Pagination -->
-            <div style="margin-top: 2rem; display: flex; justify-content: center;">
-                {{ $categories->links() }}
-            </div>
+            {{ $categories->appends(request()->except('per_page'))->links('pagination.material') }}
         @else
             <div style="text-align: center; padding: 3rem; color: #7f8c8d;">
                 <h2>لا توجد فئات</h2>

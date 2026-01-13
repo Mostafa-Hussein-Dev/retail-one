@@ -33,7 +33,7 @@ class CategoryController extends Controller
             }
         }
 
-        $categories = $query->latest()->paginate(20);
+        $categories = $query->latest()->paginate($request->get('per_page', 10));
 
         return view('categories.index', compact('categories', 'activeProductsCount' ));
     }

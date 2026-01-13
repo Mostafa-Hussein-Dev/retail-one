@@ -34,17 +34,18 @@
             text-align: center;
             margin-bottom: 10px;
             padding-bottom: 5px;
-            border-bottom: 1px solid #000;
+            border-bottom: 2px solid #000;
         }
 
         .store-name {
-            font-size: 12px;
+            font-size: 13px;
             font-weight: bold;
-            margin-bottom: 1px;
+            margin-bottom: 2px;
+            text-transform: uppercase;
         }
 
         .store-address {
-            font-size: 9px;
+            font-size: 8px;
             margin-bottom: 1px;
         }
 
@@ -56,13 +57,13 @@
 
         .receipt-info {
             margin-bottom: 8px;
-            font-size: 9px;
+            font-size: 8px;
         }
 
         .receipt-line {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 1px;
+            margin-bottom: 2px;
         }
 
         .items-section {
@@ -72,17 +73,30 @@
         .items-header {
             border-top: 1px solid #000;
             border-bottom: 1px solid #000;
-            padding: 2px 0;
-            font-size: 9px;
+            padding: 3px 0;
+            font-size: 8px;
             font-weight: bold;
             display: flex;
             justify-content: space-between;
         }
 
         .item {
-            font-size: 9px;
-            margin-bottom: 3px;
+            font-size: 8px;
+            margin-bottom: 4px;
             padding-bottom: 2px;
+            border-bottom: 1px dashed #ccc;
+        }
+
+        .item-name {
+            font-weight: 600;
+            margin-bottom: 2px;
+            font-size: 9px;
+        }
+
+        .item-details {
+            font-size: 7px;
+            color: #666;
+            margin-bottom: 2px;
         }
 
         .item-line {
@@ -100,27 +114,44 @@
         .total-line {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 1px;
+            margin-bottom: 2px;
             font-size: 9px;
         }
 
         .final-total {
             border-top: 1px solid #000;
             border-bottom: 1px solid #000;
-            padding: 3px 0;
+            padding: 4px 0;
             font-weight: bold;
-            font-size: 10px;
-            margin: 3px 0;
+            font-size: 11px;
+            margin: 4px 0;
+        }
+
+        .payment-section {
+            border-top: 1px solid #000;
+            border-bottom: 1px solid #000;
+            padding: 4px 0;
+            margin: 8px 0;
+        }
+
+        .payment-line {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2px;
+            font-size: 9px;
         }
 
         .customer-info {
             margin-bottom: 5px;
             font-size: 8px;
+            background: #f9f9f9;
+            padding: 3px;
+            border: 1px solid #ddd;
         }
 
         .footer {
             text-align: center;
-            font-size: 8px;
+            font-size: 7px;
             margin-top: 8px;
             padding-top: 5px;
             border-top: 1px dotted #999;
@@ -147,15 +178,48 @@
         }
 
         .barcode-image svg {
-            width: auto !important; /* Natural width */
+            width: auto !important;
             height: 40px !important;
-            display: inline-block; /* Center it */
+            display: inline-block;
         }
 
         .barcode-number {
             font-family: "Courier New", monospace;
             font-size: 10px;
             letter-spacing: 0.5px;
+            font-weight: bold;
+        }
+
+        .payment-method {
+            text-align: center;
+            padding: 4px;
+            margin: 5px 0;
+            font-size: 9px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .payment-cash {
+            background: #e8f5e8;
+            border: 1px solid #27ae60;
+            color: #27ae60;
+        }
+
+        .payment-debt {
+            background: #fdf7e8;
+            border: 1px solid #f39c12;
+            color: #f39c12;
+        }
+
+        .void-notice {
+            text-align: center;
+            padding: 8px;
+            margin: 8px 0;
+            border: 2px dashed #e74c3c;
+            background: #fee;
+            font-size: 10px;
+            font-weight: bold;
+            color: #e74c3c;
         }
 
         /* Print styles */
@@ -203,19 +267,16 @@
             background-color: rgba(26, 188, 156, 0.1);
         }
 
-        .void-stamp {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) rotate(-45deg);
-            border: 2px solid #e74c3c;
-            background: rgba(231, 76, 60, 0.1);
-            padding: 8px 15px;
-            font-size: 14px;
+        .bold-text {
             font-weight: bold;
-            color: #e74c3c;
+        }
+
+        .text-center {
             text-align: center;
-            white-space: nowrap;
+        }
+
+        .margin-top {
+            margin-top: 5px;
         }
     </style>
 </head>
@@ -249,7 +310,35 @@
             <span>Cashier:</span>
             <span>{{ $sale->user->name }}</span>
         </div>
+        @if($sale->is_voided)
+            <div class="receipt-line">
+                <span>Voided By:</span>
+                <span>{{ $sale->voidedBy->name }}</span>
+            </div>
+            <div class="receipt-line">
+                <span>Voided At:</span>
+                <span>{{ $sale->voided_at->format('d/m/Y H:i') }}</span>
+            </div>
+        @endif
     </div>
+
+    <!-- Payment Method -->
+    @if($sale->is_voided)
+        <div class="void-notice">
+            *** SALE VOIDED ***
+            @if($sale->void_reason)
+                <div style="margin-top: 2px;">Reason: {{ $sale->void_reason }}</div>
+            @endif
+        </div>
+    @else
+        <div class="payment-method @if($sale->payment_method === 'cash') payment-cash @else payment-debt @endif">
+            @if($sale->payment_method === 'cash')
+                CASH SALE
+            @else
+                DEBT SALE
+            @endif
+        </div>
+    @endif
 
     <!-- Customer Info -->
     @if($sale->customer)
@@ -266,26 +355,33 @@
     <!-- Items -->
     <div class="items-section">
         <div class="items-header">
-            <span>QTY</span>
-            <span>DESCRIPTION</span>
-            <span>PRICE</span>
-            <span>TOTAL</span>
+            <span style="width: 12%; text-align: left;">QTY</span>
+            <span style="width: 42%; text-align: left;">ITEM</span>
+            <span style="width: 23%; text-align: right;">PRICE</span>
+            <span style="width: 23%; text-align: right;">TOTAL</span>
         </div>
 
         @foreach($sale->saleItems as $item)
             <div class="item">
+                <div class="item-name">{{ $item->product->display_name }}</div>
+                <div class="item-details">
+                    {{ $item->product->unit_display }} × ${{ number_format($item->unit_price, 2) }}
+                    @if($item->product->category)
+                        | {{ $item->product->category->display_name }}
+                    @endif
+                </div>
                 <div class="item-line">
-                    <span>{{ number_format($item->quantity, 1) }}</span>
-                    <span>{{ $item->product->name ?: $item->product->name_ar }}</span>
-                    <span>${{ number_format($item->unit_price, 2) }}</span>
-                    <span>${{ number_format($item->total_price, 2) }}</span>
+                    <span style="width: 12%;">{{ number_format($item->quantity, 2) }}</span>
+                    <span style="width: 42%;"></span>
+                    <span style="width: 23%; text-align: right;">${{ number_format($item->unit_price, 2) }}</span>
+                    <span style="width: 23%; text-align: right;">${{ number_format($item->total_price, 2) }}</span>
                 </div>
                 @if($item->discount_amount > 0)
-                    <div class="item-line" style="font-size: 8px; color: #666;">
-                        <span></span>
-                        <span>Discount</span>
-                        <span></span>
-                        <span>-${{ number_format($item->discount_amount, 2) }}</span>
+                    <div class="item-line" style="font-size: 7px; color: #e74c3c;">
+                        <span style="width: 12%;"></span>
+                        <span style="width: 42%;">Discount</span>
+                        <span style="width: 23%; text-align: right;"></span>
+                        <span style="width: 23%; text-align: right;">-${{ number_format($item->discount_amount, 2) }}</span>
                     </div>
                 @endif
             </div>
@@ -302,7 +398,7 @@
         </div>
         <div class="total-line">
             <span>Total Quantity:</span>
-            <span>{{ number_format($sale->saleItems->sum('quantity'), 1) }}</span>
+            <span>{{ number_format($sale->saleItems->sum('quantity'), 2) }}</span>
         </div>
         <div class="total-line">
             <span>Subtotal:</span>
@@ -311,7 +407,7 @@
         @if($sale->discount_amount > 0)
             <div class="total-line">
                 <span>Total Discount:</span>
-                <span>-${{ number_format($sale->discount_amount, 2) }}</span>
+                <span style="color: #e74c3c;">-${{ number_format($sale->discount_amount, 2) }}</span>
             </div>
         @endif
 
@@ -328,9 +424,34 @@
         </div>
     </div>
 
+    <!-- Payment Details -->
+    @if(!$sale->is_voided)
+        <div class="payment-section">
+            @if($sale->payment_method === 'cash')
+                <div class="payment-line">
+                    <span>Payment Method:</span>
+                    <span>CASH</span>
+                </div>
+            @else
+                <div class="payment-line">
+                    <span>Payment Method:</span>
+                    <span>DEBT</span>
+                </div>
+                <div class="payment-line">
+                    <span>Total Paid:</span>
+                    <span>${{ number_format($sale->getTotalPaid(), 2) }}</span>
+                </div>
+                <div class="payment-line" style="font-weight: bold; @if($sale->debt_amount > 0) color: #e74c3c; @else color: #27ae60; @endif">
+                    <span>Balance Due:</span>
+                    <span>${{ number_format($sale->debt_amount, 2) }}</span>
+                </div>
+            @endif
+        </div>
+    @endif
+
     <!-- Notes -->
     @if($sale->notes && !$sale->is_voided)
-        <div style="margin: 5px 0; font-size: 8px; border: 1px solid #ccc; padding: 2px;">
+        <div style="margin: 5px 0; font-size: 8px; border: 1px solid #ccc; padding: 4px;">
             <strong>Notes:</strong><br>
             {{ $sale->notes }}
         </div>
@@ -342,20 +463,26 @@
     <div class="thank-you">
         THANK YOU FOR SHOPPING
     </div>
-    <div style="text-align: center; font-size: 8px; margin-bottom: 8px;">
-        Welcome back anytime
+    <div class="text-center" style="font-size: 8px; margin-bottom: 8px;">
+        We appreciate your business
     </div>
 
     <!-- Exchange Rate -->
-    <div style="text-align: center; font-size: 7px; margin-bottom: 8px;">
+    <div class="text-center" style="font-size: 7px; margin-bottom: 8px;">
         Exchange Rate: 1 USD = 89,500 LBP
+    </div>
+
+    <!-- Return Policy -->
+    <div class="text-center" style="font-size: 7px; margin-bottom: 8px; border: 1px solid #ccc; padding: 4px;">
+        <strong>Return Policy:</strong><br>
+        Returns accepted within 7 days<br>
+        with original receipt
     </div>
 
     <!-- Barcode Section -->
     <div class="barcode-section">
         <div class="barcode-image" style="text-align: center;">
             <?php
-            // Generate with thicker bars for better visibility
             $barcodeSvg = DNS1D::getBarcodeSVG($sale->receipt_number, 'C128', 1, 40, '#000', false);
             echo $barcodeSvg;
             ?>
@@ -366,19 +493,13 @@
     <!-- Footer -->
     <div class="footer">
         <div>Printed: {{ now()->format('d/m/Y H:i:s') }}</div>
-        <div style="margin-top: 2px; font-size: 7px;">
-            POS System
+        <div style="margin-top: 2px; font-size: 6px;">
+            POS System v1.0
+        </div>
+        <div style="margin-top: 2px; font-size: 6px;">
+            Find us on Facebook & Instagram
         </div>
     </div>
-
-    <!-- Void Stamp -->
-    @if($sale->is_voided)
-        <div style="position: relative; height: 40px;">
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); border: 2px solid #e74c3c; background: rgba(231, 76, 60, 0.1); padding: 5px 10px; font-size: 10px; font-weight: bold; color: #e74c3c; text-align: center;">
-                VOID
-            </div>
-        </div>
-    @endif
 </div>
 
 <script>
