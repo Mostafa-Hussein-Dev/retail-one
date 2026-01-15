@@ -95,6 +95,14 @@ class SupplierController extends Controller
         // Get purchases with outstanding debt
         $purchasesWithDebt = $supplier->getPurchasesWithDebt();
 
+        // Get paid purchases (fully paid)
+        $paidPurchases = $supplier->purchases()
+            ->where('is_voided', false)
+            ->where('debt_amount', '=', 0)
+            ->with('debtTransactions')
+            ->latest('purchase_date')
+            ->get();
+
         // Get transaction history
         $transactions = $supplier->getTransactionHistory();
 
@@ -112,6 +120,7 @@ class SupplierController extends Controller
         return view('suppliers.show', compact(
             'supplier',
             'purchasesWithDebt',
+            'paidPurchases',
             'transactions',
             'currentDebt'
         ));

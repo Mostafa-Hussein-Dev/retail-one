@@ -47,7 +47,6 @@
                             ${{ number_format($currentDebt, 2) }}
                         </span>
                     </p>
-                    <p style="margin-bottom: 0.5rem;"><strong>عدد المنتجات:</strong> {{ $supplier->getProductsCount() }}</p>
                     <p style="margin-bottom: 0.5rem;"><strong>إجمالي المشتريات:</strong> ${{ number_format($supplier->getTotalPurchases(), 2) }}</p>
                     <p style="margin-bottom: 0.5rem;"><strong>حالة المديونية:</strong>
                         <span style="color: {{ $supplier->getDebtStatusColor() }}; font-weight: 600;">
@@ -100,6 +99,58 @@
             @else
                 <div style="text-align: center; padding: 2rem; color: #27ae60;">
                     <p style="font-size: 1.1rem;">✓ لا توجد مشتريات غير مسددة</p>
+                </div>
+            @endif
+        </div>
+    </div>
+
+    <!-- Paid Purchases -->
+    <div class="card" style="margin-bottom: 2rem;">
+        <div style="background: #f8f9fa; padding: 1rem 1.5rem; border-bottom: 1px solid #dee2e6;">
+            <h3 style="margin: 0; color: #1abc9c;">المشتريات المسددة</h3>
+        </div>
+        <div style="padding: 1.5rem;">
+            @if($paidPurchases->count() > 0)
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>رقم الشراء</th>
+                        <th>التاريخ</th>
+                        <th>الإجمالي</th>
+                        <th>المبلغ المدفوع</th>
+                        <th>تاريخ الدفع</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach($paidPurchases as $purchase)
+                        <tr>
+                            <td><a href="{{ route('purchases.show', $purchase) }}" style="color: #3498db; text-decoration: none; font-weight: 600;">{{ $purchase->purchase_number }}</a></td>
+                            <td>{{ $purchase->purchase_date->format('Y-m-d') }}</td>
+                            <td>${{ number_format($purchase->total_amount, 2) }}</td>
+                            <td style="color: #27ae60; font-weight: 600;">
+                                ${{ number_format($purchase->paid_amount, 2) }}
+                            </td>
+                            <td>
+                                @if($purchase->debtTransactions->where('transaction_type', 'payment')->whereNull('voided_at')->count() > 0)
+                                    {{ $purchase->debtTransactions->where('transaction_type', 'payment')->whereNull('voided_at')->sortByDesc('created_at')->first()->created_at->format('Y-m-d') }}
+                                @else
+                                    -
+                                @endif
+                            </td>
+                            <td>
+                                <a href="{{ route('purchases.show', $purchase) }}"
+                                   style="color: #3498db; text-decoration: none; font-size: 0.9rem;">
+                                    عرض
+                                </a>
+                            </td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            @else
+                <div style="text-align: center; padding: 2rem; color: #7f8c8d;">
+                    <p style="font-size: 1.1rem;">لا توجد مشتريات مسددة</p>
                 </div>
             @endif
         </div>

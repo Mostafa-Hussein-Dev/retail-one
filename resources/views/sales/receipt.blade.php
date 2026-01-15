@@ -91,6 +91,9 @@
             font-weight: 600;
             margin-bottom: 2px;
             font-size: 9px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            max-width: 100%;
         }
 
         .item-details {
@@ -103,6 +106,17 @@
             display: flex;
             justify-content: space-between;
             margin-bottom: 1px;
+            white-space: nowrap;
+        }
+
+        .item-name-inline {
+            width: 42%;
+            text-align: left;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 600;
+            font-size: 8px;
         }
 
         .totals-section {
@@ -317,13 +331,14 @@
                 <span>Customer:</span>
                 <span>{{ $sale->customer->name }}</span>
             </div>
+            @if($sale->customer->phone)
+                <div class="receipt-line">
+                    <span>Phone:</span>
+                    <span>{{ $sale->customer->phone }}</span>
+                </div>
+            @endif
         @endif
-        @if($sale->customer->phone)
-            <div class="receipt-line">
-                <span>Phone:</span>
-                <span>{{ $sale->customer->phone }}</span>
-            </div>
-        @endif
+
     </div>
 
 
@@ -345,8 +360,6 @@
         </div>
     @endif
 
-
-
     <div class="divider">- - - - - - - - - - - -</div>
 
     <!-- Items -->
@@ -360,10 +373,9 @@
 
         @foreach($sale->saleItems as $item)
             <div class="item">
-                <div class="item-name">{{ $item->product->name }}</div>
                 <div class="item-line">
                     <span style="width: 12%;">{{ number_format($item->quantity, 2) }}</span>
-                    <span style="width: 42%;"></span>
+                    <span class="item-name-inline" title="{{ $item->product->name }}">{{ $item->product->name }}</span>
                     <span style="width: 23%; text-align: right;">${{ number_format($item->unit_price, 2) }}</span>
                     <span style="width: 23%; text-align: right;">${{ number_format($item->total_price, 2) }}</span>
                 </div>

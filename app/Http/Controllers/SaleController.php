@@ -15,6 +15,23 @@ class SaleController extends Controller
      */
     public function index(Request $request)
     {
+        // If receipt_number is provided in the quick search (top form), redirect to show page
+        if ($request->filled('receipt_number') && !$request->hasAny(['date_from', 'date_to', 'payment_method', 'customer_id', 'user_id'])) {
+            $sale = Sale::where('receipt_number', trim($request->receipt_number))->first();
+
+            if ($sale) {
+                // Check permissions
+                if (auth()->user()->role === 'cashier' && $sale->user_id !== auth()->id()) {
+                    return redirect()->route('sales.index')
+                        ->with('error', 'غير مسموح لك بعرض هذا الإيصال');
+                }
+                return redirect()->route('sales.show', $sale);
+            }
+
+            return redirect()->route('sales.index')
+                ->with('error', "لم يتم العثور على بيع برقم الإيصال: {$request->receipt_number}");
+        }
+
         $query = Sale::with(['customer', 'user', 'saleItems.product']);
 
         if ($request->filled('date_from') && $request->filled('date_to')) {
@@ -42,7 +59,8 @@ class SaleController extends Controller
             $query->where('user_id', auth()->id());
         }
 
-        if ($request->filled('receipt_number')) {
+        // For filter form, use LIKE search
+        if ($request->filled('receipt_number') && $request->hasAny(['date_from', 'date_to', 'payment_method', 'customer_id', 'user_id'])) {
             $query->where('receipt_number', 'like', '%' . $request->receipt_number . '%');
         }
 
@@ -86,7 +104,7 @@ class SaleController extends Controller
             abort(403, 'غير مسموح لك بعرض هذا الإيصال');
         }
 
-        $sale->load(['customer', 'user', 'saleItems.product.category']);
+        $sale->load(['customer', 'user', 'saleItems.product.category', 'returns.returnItems.product']);
 
         return view('sales.show', compact('sale'));
     }
@@ -206,9 +224,17 @@ class SaleController extends Controller
             ], 403);
         }
 
-        $request->validate([
+        // Manual validation to return JSON on failure
+        $validator = \Validator::make($request->all(), [
             'reason' => 'required|string|max:500',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'يجب إدخال سبب الإلغاء'
+            ], 422);
+        }
 
         if ($sale->is_voided) {
             return response()->json([

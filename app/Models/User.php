@@ -3,12 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -66,6 +67,28 @@ class User extends Authenticatable
     public function getRoleDisplayAttribute(): string
     {
         return $this->role === 'manager' ? 'مدير' : 'أمين صندوق';
+    }
+
+    /**
+     * Get user status display
+     */
+    public function getStatusDisplayAttribute(): string
+    {
+        if ($this->trashed()) {
+            return 'محذوف';
+        }
+        return $this->is_active ? 'نشط' : 'غير نشط';
+    }
+
+    /**
+     * Get user status color class
+     */
+    public function getStatusColorAttribute(): string
+    {
+        if ($this->trashed()) {
+            return '#e74c3c'; // red for deleted
+        }
+        return $this->is_active ? '#27ae60' : '#95a5a6'; // green for active, gray for inactive
     }
 
     /**

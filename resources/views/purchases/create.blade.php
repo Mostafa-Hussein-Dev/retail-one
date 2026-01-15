@@ -103,12 +103,11 @@
                                    style="width: 100%; padding: 13px; border: 1px solid #ccc; border-radius: 6px;">
                         </div>
                         <div>
-                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">سعر الوحدة ($) <span style="color: #e74c3c;">*</span></label>
-                            <input type="number"
-                                   id="unit-cost-input"
-                                   min="0"
-                                   step="0.01"
-                                   style="width: 100%; padding: 13px; border: 1px solid #ccc; border-radius: 6px;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">سعر الوحدة ($)</label>
+                            <div id="unit-cost-display"
+                                 style="width: 100%; padding: 13px; border: 1px solid #ddd; border-radius: 6px; background: #f8f9fa; color: #7f8c8d; font-weight: 600;">
+                                $0.00
+                            </div>
                         </div>
                     </div>
 
@@ -166,20 +165,19 @@
 
     <script>
         let items = [];
+        let selectedProductCost = 0;
 
-        // Update item total when quantity or cost changes
+        // Update item total when quantity changes
         document.getElementById('quantity-input').addEventListener('input', updateItemTotal);
-        document.getElementById('unit-cost-input').addEventListener('input', updateItemTotal);
 
-        // Update unit cost when product is selected
+        // Update unit cost display when product is selected
         document.getElementById('product-select').addEventListener('change', function() {
             const select = this;
             const selectedOption = select.options[select.selectedIndex];
-            const cost = selectedOption.dataset.cost;
-            if (cost) {
-                document.getElementById('unit-cost-input').value = cost;
-                updateItemTotal();
-            }
+            const cost = parseFloat(selectedOption.dataset.cost) || 0;
+            selectedProductCost = cost;
+            document.getElementById('unit-cost-display').textContent = '$' + cost.toFixed(2);
+            updateItemTotal();
         });
 
         // Update payment method display
@@ -190,8 +188,7 @@
 
         function updateItemTotal() {
             const quantity = parseFloat(document.getElementById('quantity-input').value) || 0;
-            const unitCost = parseFloat(document.getElementById('unit-cost-input').value) || 0;
-            const total = quantity * unitCost;
+            const total = quantity * selectedProductCost;
             document.getElementById('item-total').textContent = '$' + total.toFixed(2);
         }
 
@@ -200,15 +197,18 @@
             const productId = productSelect.value;
             const productName = productSelect.options[productSelect.selectedIndex].dataset.name;
             const quantity = parseFloat(document.getElementById('quantity-input').value);
-            const unitCost = parseFloat(document.getElementById('unit-cost-input').value);
 
-            if (!productId || !quantity || !unitCost) {
-                alert('يرجى ملء جميع الحقول المطلوبة');
+            if (!productId || !quantity || !selectedProductCost) {
+                showAlertDialog({
+                    type: 'warning',
+                    title: 'تحذير',
+                    message: 'يرجى ملء جميع الحقول المطلوبة'
+                });
                 return;
             }
 
-            const totalCost = quantity * unitCost;
-            items.push({ product_id: parseInt(productId), product_name: productName, quantity, unit_cost: unitCost, total_cost: totalCost });
+            const totalCost = quantity * selectedProductCost;
+            items.push({ product_id: parseInt(productId), product_name: productName, quantity, unit_cost: selectedProductCost, total_cost: totalCost });
 
             renderItems();
             updateSummary();
@@ -216,8 +216,9 @@
             // Reset form
             productSelect.value = '';
             document.getElementById('quantity-input').value = 1;
-            document.getElementById('unit-cost-input').value = '';
+            document.getElementById('unit-cost-display').textContent = '$0.00';
             document.getElementById('item-total').textContent = '$0.00';
+            selectedProductCost = 0;
         }
 
         function removeItem(index) {
@@ -256,18 +257,26 @@
             document.getElementById('total-amount').textContent = '$' + total.toFixed(2);
         }
 
-        function submitPurchase() {
+        async function submitPurchase() {
             const supplierId = document.getElementById('supplier-select').value;
             const paymentMethod = document.getElementById('payment-method').value;
             const notes = document.getElementById('notes').value;
 
             if (!supplierId) {
-                alert('يرجى اختيار المورد');
+                await showAlertDialog({
+                    type: 'warning',
+                    title: 'تحذير',
+                    message: 'يرجى اختيار المورد'
+                });
                 return;
             }
 
             if (items.length === 0) {
-                alert('يرجى إضافة منتج واحد على الأقل');
+                await showAlertDialog({
+                    type: 'warning',
+                    title: 'تحذير',
+                    message: 'يرجى إضافة منتج واحد على الأقل'
+                });
                 return;
             }
 
@@ -282,21 +291,52 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
                 },
                 body: JSON.stringify(data)
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    alert('حدث خطأ: ' + (data.message || 'يرجى المحاولة مرة أخرى'));
-                } else {
-                    window.location.href = '/purchases/' + data.id;
+            .then(async response => {
+                console.log('Response status:', response.status);
+                console.log('Response ok:', response.ok);
+
+                const contentType = response.headers.get('content-type');
+                console.log('Content-Type:', contentType);
+
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    console.error('Expected JSON, got:', text);
+                    await showAlertDialog({
+                        type: 'error',
+                        title: 'خطأ',
+                        message: 'حدث خطأ: استجابة غير صالحة من الخادم'
+                    });
+                    return;
                 }
+
+                const data = await response.json();
+                console.log('Response data:', data);
+
+                if (!response.ok || data.error) {
+                    await showAlertDialog({
+                        type: 'error',
+                        title: 'خطأ',
+                        message: 'حدث خطأ: ' + (data.message || data.error || 'يرجى المحاولة مرة أخرى')
+                    });
+                    return;
+                }
+
+                // Success - redirect to purchase page
+                console.log('Redirecting to:', '/purchases/' + data.id);
+                window.location.href = '/purchases/' + data.id;
             })
-            .catch(error => {
+            .catch(async error => {
                 console.error('Error:', error);
-                alert('حدث خطأ أثناء حفظ الشراء');
+                await showAlertDialog({
+                    type: 'error',
+                    title: 'خطأ',
+                    message: 'حدث خطأ أثناء حفظ الشراء: ' + error.message
+                });
             });
         }
     </script>

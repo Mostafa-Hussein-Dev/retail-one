@@ -578,8 +578,16 @@
                 });
         }
 
-        function clearCart() {
-            if (!confirm('هل تريد مسح جميع المنتجات من السلة؟')) return;
+        async function clearCart() {
+            const confirmed = await showConfirmDialog({
+                type: 'warning',
+                title: 'تأكيد المسح',
+                message: 'هل تريد مسح جميع المنتجات من السلة؟',
+                confirmText: 'نعم، امسح',
+                cancelText: 'إلغاء'
+            });
+
+            if (!confirmed) return;
 
             fetch('/pos/clear-cart', {
                 method: 'POST',

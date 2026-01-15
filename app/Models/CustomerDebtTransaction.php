@@ -64,11 +64,17 @@ class CustomerDebtTransaction extends Model
         return !is_null($this->voided_at);
     }
 
+    public function scopeRefund($query)
+    {
+        return $query->where('transaction_type', 'refund');
+    }
+
     public function getTypeText(): string
     {
         return match ($this->transaction_type) {
             'debt' => 'دين',
             'payment' => 'دفعة',
+            'refund' => 'استرداد',
             default => 'غير معروف',
         };
     }
@@ -78,6 +84,7 @@ class CustomerDebtTransaction extends Model
         return match ($this->transaction_type) {
             'debt' => '#e74c3c',
             'payment' => '#27ae60',
+            'refund' => '#f39c12',
             default => '#95a5a6',
         };
     }

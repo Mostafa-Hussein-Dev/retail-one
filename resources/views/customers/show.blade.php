@@ -13,17 +13,16 @@
                onmouseout="this.style.backgroundColor='transparent'">
                 تعديل
             </a>
-            <form method="POST" action="{{ route('customers.destroy', $customer) }}" onsubmit="return confirm('هل أنت متأكد من حذف هذا العميل؟ لا يمكن التراجع عن هذا الإجراء.');"
-                  style="display: inline-block;">
+            <form id="deleteCustomerForm" method="POST" action="{{ route('customers.destroy', $customer) }}" style="display: inline-block;">
                 @csrf
                 @method('DELETE')
-                <button type="submit"
-                        style="background-color: transparent; color: #e74c3c; padding: 12px 40px; border: 2px solid #e74c3c; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; transition: all 0.3s ease;"
-                        onmouseover="this.style.backgroundColor='rgba(231, 76, 60, 0.1)'"
-                        onmouseout="this.style.backgroundColor='transparent'">
-                    حذف
-                </button>
             </form>
+            <button type="button" onclick="confirmDeleteCustomer()"
+                    style="background-color: transparent; color: #e74c3c; padding: 12px 40px; border: 2px solid #e74c3c; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; transition: all 0.3s ease;"
+                    onmouseover="this.style.backgroundColor='rgba(231, 76, 60, 0.1)'"
+                    onmouseout="this.style.backgroundColor='transparent'">
+                حذف
+            </button>
             <a href="{{ route('customers.index') }}"
                style="display: inline-block; background-color: transparent; color: #1abc9c; padding: 12px 40px; border: 2px solid #1abc9c; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; text-decoration: none; text-align: center; transition: all 0.3s ease; line-height: normal;"
                onmouseover="this.style.backgroundColor='rgba(26,188,156,0.15)'"
@@ -271,5 +270,23 @@
             pointer-events: none;
         }
     </style>
+
+@push('scripts')
+    <script>
+        async function confirmDeleteCustomer() {
+            const confirmed = await showConfirmDialog({
+                type: 'error',
+                title: 'تأكيد الحذف',
+                message: 'هل أنت متأكد من حذف هذا العميل؟ لا يمكن التراجع عن هذا الإجراء.',
+                confirmText: 'نعم، احذف',
+                cancelText: 'إلغاء'
+            });
+
+            if (confirmed) {
+                document.getElementById('deleteCustomerForm').submit();
+            }
+        }
+    </script>
+@endpush
 
 @endsection

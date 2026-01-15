@@ -94,15 +94,33 @@
                                 </div>
                             @endif
                         </div>
+                    @elseif($sale->isFullyReturned())
+                        <div style="background: #fdf7e8; border: 1px solid #f39c12; padding: 1rem; border-radius: 6px; border-left: 4px solid #f39c12;">
+                            <strong style="color: #856404;">مرتجع بالكامل</strong>
+                        </div>
                     @elseif($sale->payment_method === 'debt' && $sale->debt_amount > 0)
                         @php
                             $paidAmount = $sale->getTotalPaid();
+                            // Calculate debt reduction from returns
+                            $debtReductionFromReturns = $sale->returns()
+                                ->where('is_voided', false)
+                                ->sum('debt_reduction_amount');
+                            // Calculate remaining debt
+                            $originalDebt = $sale->total_amount;
+                            $remainingDebt = $sale->debt_amount;
                         @endphp
                         <div style="background: #fdf7e8; border: 1px solid #f39c12; padding: 1rem; border-radius: 6px; border-left: 4px solid #f39c12;">
-                            @if($paidAmount > 0)
-                                <strong style="color: #856404;">دين مستحق: ${{ number_format($sale->total_amount, 2) }} (الباقي: {{ number_format($sale->debt_amount, 2) }}$)</strong>
+                            @if($paidAmount > 0 || $debtReductionFromReturns > 0)
+                                <strong style="color: #856404;">
+                                    الدين الأصلي: ${{ number_format($originalDebt, 2) }}
+                                    @if($debtReductionFromReturns > 0)
+                                        (قيمة المرتجعات: ${{ number_format($debtReductionFromReturns, 2) }})
+                                    @endif
+                                    <br>
+                                    الباقي المستحق: ${{ number_format($remainingDebt, 2) }}
+                                </strong>
                             @else
-                                <strong style="color: #856404;">دين مستحق: ${{ number_format($sale->debt_amount, 2) }}</strong>
+                                <strong style="color: #856404;">دين مستحق: ${{ number_format($remainingDebt, 2) }}</strong>
                             @endif
                         </div>
                     @else
@@ -213,12 +231,29 @@
                     ${{ number_format($sale->discount_amount, 2) }}
                 </div>
             @endif
-            <div style="font-size: 1.5rem; font-weight: bold; color: #1abc9c; padding-top: 0.5rem;">
-                <strong>الإجمالي النهائي:</strong><br>
-                ${{ number_format($sale->total_amount, 2) }}
+
+            @php
+                $totalReturned = $sale->getTotalReturned();
+                $netTotal = $sale->total_amount - $totalReturned;
+            @endphp
+
+            @if($totalReturned > 0)
+                <div style="margin-bottom: 0.5rem; color: #7f8c8d; font-size: 0.9rem;">
+                    <strong>الإجمالي الأصلي:</strong><br>
+                    <span style="text-decoration: line-through;">${{ number_format($sale->total_amount, 2) }}</span>
+                </div>
+                <div style="margin-bottom: 0.5rem; color: #e74c3c; font-size: 0.95rem;">
+                    <strong>ناقص المرتجع:</strong><br>
+                    -${{ number_format($totalReturned, 2) }}
+                </div>
+            @endif
+
+            <div style="font-size: 1.5rem; font-weight: bold; color: #1abc9c; padding-top: {{ $totalReturned > 0 ? '0.5rem' : '0.5rem' }}; border-top: {{ $totalReturned > 0 ? '2px solid #ecf0f1' : 'none' }}; margin-top: {{ $totalReturned > 0 ? '0.5rem' : '0' }};">
+                <strong>الإجمالي{{ $totalReturned > 0 ? ' النهائي' : '' }}:</strong><br>
+                ${{ number_format($netTotal, 2) }}
             </div>
             <div style="color: #7f8c8d; font-size: 0.9rem; margin-top: 0.5rem;">
-                {{ number_format($sale->total_amount * 89500) }} ل.ل.
+                {{ number_format($netTotal * 89500) }} ل.ل.
             </div>
         </div>
 
@@ -258,8 +293,8 @@
         </div>
     </div>
 
-    <!-- Payment Transactions (for debt sales) -->
-    @if($sale->payment_method === 'debt' && $sale->customer && $sale->debtTransactions()->count() > 0)
+    <!-- Payment Transactions -->
+    @if($sale->customer && $sale->debtTransactions()->count() > 0)
         <div class="card" style="margin-bottom: 2rem;">
             <h3 style="margin-bottom: 1.5rem; color: #2c3e50;">سجل المدفوعات</h3>
 
@@ -322,6 +357,89 @@
         </div>
     @endif
 
+    <!-- Returns Section -->
+    @if($sale->returns()->where('is_voided', false)->count() > 0)
+        <div class="card" style="margin-bottom: 2rem;">
+            <h3 style="margin-bottom: 1.5rem; color: #2c3e50;">المرتجعات</h3>
+
+            <table class="table">
+                <thead>
+                <tr>
+                    <th style="text-align: center; vertical-align: middle;">رقم الإرجاع</th>
+                    <th style="text-align: center; vertical-align: middle;">التاريخ</th>
+                    <th style="text-align: center; vertical-align: middle;">المنتجات</th>
+                    <th style="text-align: center; vertical-align: middle;">المبلغ</th>
+                    <th style="text-align: center; vertical-align: middle;">طريقة الاسترداد</th>
+                    <th style="text-align: center; vertical-align: middle;">المعالج بواسطة</th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach($sale->returns()->where('is_voided', false)->orderBy('created_at', 'desc')->get() as $return)
+                    <tr @if($return->is_voided) style="opacity: 0.6; background-color: #f8f9fa;" @endif>
+                        <td style="text-align: center; vertical-align: middle;">
+                            <a href="{{ route('returns.show', $return) }}"
+                               style="color: #3498db; text-decoration: none; font-weight: 600; transition: color 0.3s ease;"
+                               onmouseover="this.style.color='#2980b9'"
+                               onmouseout="this.style.color='#3498db'">
+                                {{ $return->return_number }}
+                            </a>
+                            @if($return->is_voided)
+                                <div style="font-size: 0.75rem; color: #e74c3c;">ملغي</div>
+                            @endif
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            {{ $return->return_date->format('Y-m-d H:i') }}
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            @foreach($return->returnItems as $item)
+                                <div style="font-size: 0.9rem;">
+                                    {{ $item->product->display_name }} × {{ number_format($item->quantity, 2) }}
+                                </div>
+                            @endforeach
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            <span style="color: #e74c3c; font-weight: 600;">
+                                ${{ number_format($return->total_return_amount, 2) }}
+                            </span>
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            <span class="badge" style="background: {{ $return->getStatusColor() }}; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; display: inline-block;">
+                                {{ $return->getPaymentMethodText() }}
+                            </span>
+                            @if($return->cash_refund_amount > 0)
+                                <div style="font-size: 0.75rem; color: #27ae60; margin-top: 4px;">
+                                    استرداد: ${{ number_format($return->cash_refund_amount, 2) }}
+                                </div>
+                            @endif
+                            @if($return->debt_reduction_amount > 0)
+                                <div style="font-size: 0.75rem; color: #3498db; margin-top: 4px;">
+                                    تخفيض دين: ${{ number_format($return->debt_reduction_amount, 2) }}
+                                </div>
+                            @endif
+                        </td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            {{ $return->user->name }}
+                        </td>
+                    </tr>
+                @endforeach
+                </tbody>
+                <tfoot>
+                    <tr style="background: #f8f9fa; font-weight: 600;">
+                        <td colspan="3" style="text-align: center; vertical-align: middle; padding: 1rem;">
+                            إجمالي الاسترداد:
+                        </td>
+                        <td style="text-align: center; vertical-align: middle; padding: 1rem;">
+                            <span style="color: #e74c3c; font-size: 1.1rem;">
+                                ${{ number_format($sale->getTotalReturned(), 2) }}
+                            </span>
+                        </td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    @endif
+
     <!-- Action Buttons -->
     @if(auth()->user()->role === 'manager' && !$sale->is_voided)
         <div class="card" style="text-align: center;">
@@ -357,17 +475,32 @@
 
 @push('scripts')
     <script>
-        function voidSale(saleId) {
-            const reason = prompt('سبب إلغاء البيع:');
+        async function voidSale(saleId) {
+            const reason = await showPromptDialog({
+                type: 'warning',
+                title: 'سبب الإلغاء',
+                message: 'الرجاء إدخال سبب إلغاء هذا البيع:',
+                placeholder: 'سبب الإلغاء...'
+            });
 
             if (!reason || reason.trim() === '') {
-                alert('يجب إدخال سبب الإلغاء');
+                await showAlertDialog({
+                    type: 'error',
+                    title: 'خطأ',
+                    message: 'يجب إدخال سبب الإلغاء'
+                });
                 return;
             }
 
-            if (!confirm('هل أنت متأكد من إلغاء هذا البيع؟ سيتم إعادة جميع المنتجات للمخزون وهذا الإجراء لا يمكن التراجع عنه.')) {
-                return;
-            }
+            const confirmed = await showConfirmDialog({
+                type: 'error',
+                title: 'تأكيد الإلغاء',
+                message: 'هل أنت متأكد من إلغاء هذا البيع؟ سيتم إعادة جميع المنتجات للمخزون وهذا الإجراء لا يمكن التراجع عنه.',
+                confirmText: 'تأكيد الإلغاء',
+                cancelText: 'إلغاء'
+            });
+
+            if (!confirmed) return;
 
             fetch(`/sales/${saleId}/void`, {
                 method: 'POST',
@@ -378,17 +511,29 @@
                 body: JSON.stringify({ reason: reason.trim() })
             })
                 .then(response => response.json())
-                .then(data => {
+                .then(async data => {
                     if (data.success) {
-                        alert(data.message);
+                        await showAlertDialog({
+                            type: 'success',
+                            title: 'نجاح',
+                            message: data.message
+                        });
                         location.reload();
                     } else {
-                        alert(data.message);
+                        await showAlertDialog({
+                            type: 'error',
+                            title: 'خطأ',
+                            message: data.message
+                        });
                     }
                 })
-                .catch(error => {
+                .catch(async error => {
                     console.error('Error:', error);
-                    alert('حدث خطأ في إلغاء البيع');
+                    await showAlertDialog({
+                        type: 'error',
+                        title: 'خطأ',
+                        message: 'حدث خطأ في إلغاء البيع'
+                    });
                 });
         }
     </script>

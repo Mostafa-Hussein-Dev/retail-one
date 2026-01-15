@@ -12,17 +12,14 @@ use App\Http\Controllers\SaleController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\SupplierDebtController;
+use App\Http\Controllers\ReturnController;
+use App\Http\Controllers\UserController;
 
 /*
 |--------------------------------------------------------------------------
 | Web Routes
 |--------------------------------------------------------------------------
 */
-
-// Redirect root to dashboard
-Route::get('/', function () {
-    return redirect()->route('dashboard');
-});
 
 // Authentication Routes
 Route::middleware('guest')->group(function () {
@@ -31,6 +28,11 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
+    // Redirect root to dashboard (must be inside auth middleware)
+    Route::get('/', function () {
+        return redirect()->route('dashboard');
+    });
+
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -91,4 +93,79 @@ Route::middleware('auth')->group(function () {
     // ===== SUPPLIER DEBT & PAYMENT ROUTES =====
     Route::get('/suppliers/{supplier}/purchases/{purchase}/payment', [SupplierDebtController::class, 'showPaymentForm'])->name('supplier-debt.payment-form');
     Route::post('/suppliers/{supplier}/purchases/{purchase}/payment', [SupplierDebtController::class, 'recordPayment'])->name('supplier-debt.record-payment');
+
+    // ===== RETURNS ROUTES =====
+    Route::get('/returns', [ReturnController::class, 'index'])->name('returns.index');
+    Route::get('/returns/create', [ReturnController::class, 'create'])->name('returns.create');
+    Route::post('/returns/search-sale', [ReturnController::class, 'searchSale'])->name('returns.search-sale');
+    Route::post('/returns', [ReturnController::class, 'store'])->name('returns.store');
+    Route::get('/returns/{return}', [ReturnController::class, 'show'])->name('returns.show');
+    Route::get('/returns/{return}/receipt', [ReturnController::class, 'receipt'])->name('returns.receipt');
+    Route::post('/returns/{return}/void', [ReturnController::class, 'void'])->name('returns.void');
+
+    // ===== REPORTS ROUTES =====
+    Route::prefix('reports')->name('reports.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\ReportController::class, 'index'])->name('index');
+        Route::get('/sales', [\App\Http\Controllers\ReportController::class, 'sales'])->name('sales');
+        Route::get('/sales/by-period', [\App\Http\Controllers\ReportController::class, 'salesByPeriod'])->name('sales.by-period');
+        Route::get('/sales/export', [\App\Http\Controllers\ReportController::class, 'exportSales'])->name('sales.export');
+        Route::get('/sales/pdf', [\App\Http\Controllers\ReportController::class, 'exportSalesPdf'])->name('sales.pdf');
+        Route::get('/profit', [\App\Http\Controllers\ReportController::class, 'profit'])->name('profit');
+        Route::get('/profit/export', [\App\Http\Controllers\ReportController::class, 'exportProfit'])->name('profit.export');
+        Route::get('/inventory/low-stock', [\App\Http\Controllers\ReportController::class, 'lowStock'])->name('inventory.low-stock');
+        Route::get('/inventory/low-stock/export', [\App\Http\Controllers\ReportController::class, 'exportLowStock'])->name('inventory.low-stock.export');
+        Route::get('/inventory/stock-value', [\App\Http\Controllers\ReportController::class, 'stockValue'])->name('inventory.stock-value');
+        Route::get('/customers/debt', [\App\Http\Controllers\ReportController::class, 'customerDebt'])->name('customers.debt');
+        Route::get('/customers/debt-aging', [\App\Http\Controllers\ReportController::class, 'customerDebtAging'])->name('customers.debt-aging');
+        Route::get('/customers/debt-aging/export', [\App\Http\Controllers\ReportController::class, 'exportCustomerDebtAging'])->name('customers.debt-aging.export');
+        Route::get('/suppliers/debt', [\App\Http\Controllers\ReportController::class, 'supplierDebt'])->name('suppliers.debt');
+        Route::get('/suppliers/debt-aging', [\App\Http\Controllers\ReportController::class, 'supplierDebtAging'])->name('suppliers.debt-aging');
+        Route::get('/suppliers/debt-aging/export', [\App\Http\Controllers\ReportController::class, 'exportSupplierDebtAging'])->name('suppliers.debt-aging.export');
+        Route::get('/returns', [\App\Http\Controllers\ReportController::class, 'returns'])->name('returns');
+        Route::get('/returns/export', [\App\Http\Controllers\ReportController::class, 'exportReturns'])->name('returns.export');
+        Route::get('/returns/pdf', [\App\Http\Controllers\ReportController::class, 'exportReturnsPdf'])->name('returns.pdf');
+    });
+
+    // ===== SETTINGS ROUTES =====
+    Route::prefix('settings')->name('settings.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\SettingsController::class, 'index'])->name('index');
+
+        // Profile (all authenticated users)
+        Route::get('/profile', [UserController::class, 'profile'])->name('profile');
+        Route::post('/profile', [UserController::class, 'updateProfile'])->name('profile.update');
+
+        // Manager-only routes
+        Route::middleware('role:manager')->group(function () {
+            // Store settings
+            Route::get('/store', [\App\Http\Controllers\SettingsController::class, 'store'])->name('store');
+            Route::post('/store', [\App\Http\Controllers\SettingsController::class, 'updateStore'])->name('store.update');
+
+            // Exchange rate
+            Route::get('/exchange-rate', [\App\Http\Controllers\SettingsController::class, 'exchangeRate'])->name('exchange-rate');
+            Route::post('/exchange-rate', [\App\Http\Controllers\SettingsController::class, 'updateExchangeRate'])->name('exchange-rate.update');
+
+            // Preferences
+            Route::get('/preferences', [\App\Http\Controllers\SettingsController::class, 'preferences'])->name('preferences');
+            Route::post('/preferences', [\App\Http\Controllers\SettingsController::class, 'updatePreferences'])->name('preferences.update');
+
+            // User management
+            Route::get('/users', [UserController::class, 'index'])->name('users.index');
+            Route::get('/users/create', [UserController::class, 'create'])->name('users.create');
+            Route::post('/users', [UserController::class, 'store'])->name('users.store');
+            Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
+            Route::post('/users/{user}', [UserController::class, 'update'])->name('users.update');
+            Route::post('/users/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('users.toggle-status');
+            Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+            Route::post('/users/{user}/restore', [UserController::class, 'restore'])->name('users.restore');
+            Route::delete('/users/{user}/force-delete', [UserController::class, 'forceDelete'])->name('users.force-delete');
+
+            // Backup
+            Route::get('/backup', [\App\Http\Controllers\BackupController::class, 'index'])->name('backup');
+            Route::post('/backup/create', [\App\Http\Controllers\BackupController::class, 'create'])->name('backup.create');
+            Route::get('/backup/download', [\App\Http\Controllers\BackupController::class, 'download'])->name('backup.download');
+            Route::delete('/backup/delete', [\App\Http\Controllers\BackupController::class, 'destroy'])->name('backup.destroy');
+            Route::post('/backup/restore', [\App\Http\Controllers\BackupController::class, 'restore'])->name('backup.restore');
+            Route::post('/backup/upload', [\App\Http\Controllers\BackupController::class, 'uploadAndRestore'])->name('backup.upload');
+        });
+    });
 });

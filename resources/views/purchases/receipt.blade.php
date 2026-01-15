@@ -411,7 +411,7 @@
                 </div>
                 <div class="payment-line">
                     <span>Total Paid:</span>
-                    <span style="color: #27ae60; font-weight: bold;">${{ number_format($purchase->paid_amount, 2) }}</span>
+                    <span style="color: black; font-weight: bold;">${{ number_format($purchase->paid_amount, 2) }}</span>
                 </div>
             @else
                 <div class="payment-line">

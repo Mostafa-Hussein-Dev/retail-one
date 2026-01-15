@@ -179,67 +179,19 @@
         </div>
     </div>
 
-    <!-- Stock Adjustment -->
-    <div class="card" style="margin-bottom: 2rem;">
-        <h3 style="margin-bottom: 1.5rem;">تعديل الكمية</h3>
-
-        <form method="POST" action="{{ route('products.adjust-stock', $product) }}" style="display: grid; grid-template-columns: 2fr 3fr 1fr; gap: 1rem; align-items: end;">
-            @csrf
-            @method('PATCH')
-
-            <div>
-                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">الكمية الجديدة</label>
-                <input type="number"
-                       name="quantity"
-                       value="{{ $product->quantity }}"
-                       step="0.01"
-                       min="0"
-                       required
-                       style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px;">
-            </div>
-
-            <div>
-                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">السبب (اختياري)</label>
-                <input type="text"
-                       name="reason"
-                       placeholder="مثال: جرد، إضافة شحنة، تلف..."
-                       style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px;">
-            </div>
-
-            <button type="submit"
-                    style="background: #3498db; color: white; padding: 12px 20px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;"
-                    onclick="return confirm('هل أنت متأكد من تعديل الكمية؟')">
-                تعديل
-            </button>
-        </form>
-
-        <!-- Quick Adjustments -->
-        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-            <span style="color: #7f8c8d; font-weight: 600; margin-left: 1rem;">تعديلات سريعة:</span>
-            @foreach([-10, -5, -1, 1, 5, 10] as $adjustment)
-                <button type="button"
-                        onclick="quickAdjust({{ $adjustment }})"
-                        style="padding: 6px 12px; background: {{ $adjustment < 0 ? '#e74c3c' : '#27ae60' }}; color: white; border: none; border-radius: 4px; font-size: 0.9rem; cursor: pointer;">
-                    {{ $adjustment > 0 ? '+' : '' }}{{ $adjustment }}
-                </button>
-            @endforeach
-        </div>
-    </div>
-
     <!-- Action Buttons -->
     <div class="card">
         <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
-            <form method="POST" action="{{ route('products.destroy', $product) }}" style="display: inline;">
+            <form id="deleteProductForm" method="POST" action="{{ route('products.destroy', $product) }}" style="display: inline;">
                 @csrf
                 @method('DELETE')
-                <button type="submit"
-                        onclick="return confirm('هل أنت متأكد من حذف المنتج؟ هذا الإجراء لا يمكن التراجع عنه.')"
-                        style="background-color: transparent; color: #e74c3c; padding: 12px 100px; border: 2px solid #e74c3c; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; transition: all 0.3s ease;"
-                        onmouseover="this.style.backgroundColor='rgba(231, 76, 60, 0.1)'"
-                        onmouseout="this.style.backgroundColor='transparent'">
-                    حذف المنتج
-                </button>
             </form>
+            <button type="button" onclick="confirmDeleteProduct()"
+                    style="background-color: transparent; color: #e74c3c; padding: 12px 100px; border: 2px solid #e74c3c; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; transition: all 0.3s ease;"
+                    onmouseover="this.style.backgroundColor='rgba(231, 76, 60, 0.1)'"
+                    onmouseout="this.style.backgroundColor='transparent'">
+                حذف المنتج
+            </button>
             <button type="button" onclick="window.location.href='{{ route('products.edit', $product) }}'"
                     style="background-color: transparent; color: #f39c12; padding: 12px 100px; border: 2px solid #f39c12; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; transition: all 0.3s ease;"
                     onmouseover="this.style.backgroundColor='rgba(243, 156, 18, 0.1)'; this.style.color='#f39c12'"
@@ -257,6 +209,34 @@
                 const currentQuantity = parseFloat(quantityInput.value) || 0;
                 const newQuantity = Math.max(0, currentQuantity + adjustment);
                 quantityInput.value = newQuantity;
+            }
+
+            async function confirmQuantityAdjustment() {
+                const confirmed = await showConfirmDialog({
+                    type: 'warning',
+                    title: 'تأكيد التعديل',
+                    message: 'هل أنت متأكد من تعديل الكمية؟',
+                    confirmText: 'نعم، عدل',
+                    cancelText: 'إلغاء'
+                });
+
+                if (confirmed) {
+                    document.getElementById('adjustQuantityForm').submit();
+                }
+            }
+
+            async function confirmDeleteProduct() {
+                const confirmed = await showConfirmDialog({
+                    type: 'error',
+                    title: 'تأكيد الحذف',
+                    message: 'هل أنت متأكد من حذف المنتج؟ هذا الإجراء لا يمكن التراجع عنه.',
+                    confirmText: 'نعم، احذف',
+                    cancelText: 'إلغاء'
+                });
+
+                if (confirmed) {
+                    document.getElementById('deleteProductForm').submit();
+                }
             }
         </script>
     @endpush

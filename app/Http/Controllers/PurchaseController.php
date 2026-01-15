@@ -96,22 +96,45 @@ class PurchaseController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        // Manual validation to return JSON on failure
+        $validator = \Validator::make($request->all(), [
             'supplier_id' => 'required|exists:suppliers,id',
             'payment_method' => 'required|in:cash,debt',
             'notes' => 'nullable|string|max:500',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|numeric|min:0.01',
-            'items.*.unit_cost' => 'required|numeric|min:0',
         ]);
+
+        if ($validator->fails()) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'error' => true,
+                    'message' => $validator->errors()->first()
+                ], 422);
+            }
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
+        }
 
         DB::beginTransaction();
         try {
-            // Calculate total amount
+            // Calculate total amount and prepare items with product costs
             $totalAmount = 0;
+            $itemsWithCosts = [];
             foreach ($request->items as $item) {
-                $totalAmount += $item['quantity'] * $item['unit_cost'];
+                $product = Product::findOrFail($item['product_id']);
+                $unitCost = $product->cost_price;
+                $totalCost = $item['quantity'] * $unitCost;
+                $totalAmount += $totalCost;
+
+                $itemsWithCosts[] = [
+                    'product' => $product,
+                    'quantity' => $item['quantity'],
+                    'unit_cost' => $unitCost,
+                    'total_cost' => $totalCost,
+                ];
             }
 
             // Create purchase
@@ -126,25 +149,20 @@ class PurchaseController extends Controller
             ]);
 
             // Create purchase items and increase stock
-            foreach ($request->items as $item) {
-                $product = Product::findOrFail($item['product_id']);
-                $totalCost = $item['quantity'] * $item['unit_cost'];
+            foreach ($itemsWithCosts as $itemWithCost) {
+                $product = $itemWithCost['product'];
 
                 // Create purchase item
                 PurchaseItem::create([
                     'purchase_id' => $purchase->id,
                     'product_id' => $product->id,
-                    'quantity' => $item['quantity'],
-                    'unit_cost' => $item['unit_cost'],
-                    'total_cost' => $totalCost,
+                    'quantity' => $itemWithCost['quantity'],
+                    'unit_cost' => $itemWithCost['unit_cost'],
+                    'total_cost' => $itemWithCost['total_cost'],
                 ]);
 
                 // Increase stock
-                $product->increment('quantity', $item['quantity']);
-
-                // Update product cost price (optional: take average or use latest)
-                $product->cost_price = $item['unit_cost'];
-                $product->save();
+                $product->increment('quantity', $itemWithCost['quantity']);
             }
 
             // If debt payment, create debt transaction
@@ -177,6 +195,13 @@ class PurchaseController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'error' => true,
+                    'message' => 'حدث خطأ أثناء إنشاء الشراء: ' . $e->getMessage()
+                ], 500);
+            }
 
             return redirect()->back()
                 ->with('error', 'حدث خطأ أثناء إنشاء الشراء: ' . $e->getMessage())
@@ -212,9 +237,17 @@ class PurchaseController extends Controller
             ], 403);
         }
 
-        $request->validate([
+        // Manual validation to return JSON on failure
+        $validator = \Validator::make($request->all(), [
             'reason' => 'required|string|max:500',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'يجب إدخال سبب الإلغاء'
+            ], 422);
+        }
 
         if ($purchase->is_voided) {
             return response()->json([

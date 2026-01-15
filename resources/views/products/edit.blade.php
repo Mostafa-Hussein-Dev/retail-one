@@ -105,28 +105,15 @@
                         </div>
                     </div>
 
-                    <!-- Quantity and Unit -->
-                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
-                        <div>
-                            <label>الكمية <span style="color: #e74c3c;">*</span></label>
-                            <input type="number"
-                                   name="quantity"
-                                   value="{{ old('quantity', $product->quantity) }}"
-                                   step="0.01"
-                                   min="0"
-                                   required>
-                        </div>
-                        <div>
-                            <label>الوحدة <span style="color: #e74c3c;">*</span></label>
-                            <select name="unit" required>
-                                @foreach($units as $value => $label)
-                                    <option value="{{ $value }}" {{ old('unit', $product->unit) == $value ? 'selected' : '' }}>
-                                        {{ $label }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
+                    <!-- Unit -->
+                    <label>الوحدة <span style="color: #e74c3c;">*</span></label>
+                    <select name="unit" required>
+                        @foreach($units as $value => $label)
+                            <option value="{{ $value }}" {{ old('unit', $product->unit) == $value ? 'selected' : '' }}>
+                                {{ $label }}
+                            </option>
+                        @endforeach
+                    </select>
 
                     <!-- Minimum Quantity -->
                     <label>الكمية الأدنى <span style="color: #e74c3c;">*</span></label>

@@ -169,6 +169,7 @@ class SaleItem extends Model
     public function getReturnedQuantity(): float
     {
         return $this->sale->returns()
+            ->where('is_voided', false) // Only count non-voided returns
             ->join('return_items', 'returns.id', '=', 'return_items.return_id')
             ->where('return_items.sale_item_id', $this->id)
             ->sum('return_items.quantity');

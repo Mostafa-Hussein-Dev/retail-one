@@ -14,6 +14,14 @@
                onmouseout="this.style.backgroundColor='transparent'">
                 طباعة الإيصال
             </a>
+            @if($purchase->debt_amount > 0 && !$purchase->is_voided)
+                <a href="{{ route('supplier-debt.payment-form', [$purchase->supplier, $purchase]) }}"
+                   style="background-color: transparent; color: #27ae60; padding: 12px 50px; border: 2px solid #27ae60; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; text-decoration: none; text-align: center; transition: all 0.3s ease; line-height: normal;"
+                   onmouseover="this.style.backgroundColor='rgba(39, 174, 96, 0.1)'"
+                   onmouseout="this.style.backgroundColor='transparent'">
+                    تسديد الدين
+                </a>
+            @endif
             @if(auth()->user()->role === 'manager' && !$purchase->is_voided)
                 <button onclick="showVoidModal()"
                         style="background-color: transparent; color: #e74c3c; padding: 12px 50px; border: 2px solid #e74c3c; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: 1rem; transition: all 0.3s ease;"
@@ -179,10 +187,14 @@
             document.getElementById('voidModal').style.display = 'none';
         }
 
-        function confirmVoid() {
+        async function confirmVoid() {
             const reason = document.getElementById('void-reason').value;
             if (!reason.trim()) {
-                alert('يرجى إدخال سبب الإلغاء');
+                await showAlertDialog({
+                    type: 'warning',
+                    title: 'تحذير',
+                    message: 'يرجى إدخال سبب الإلغاء'
+                });
                 return;
             }
 
@@ -195,17 +207,29 @@
                 body: JSON.stringify({ reason: reason })
             })
             .then(response => response.json())
-            .then(data => {
+            .then(async data => {
                 if (data.success) {
-                    alert(data.message);
+                    await showAlertDialog({
+                        type: 'success',
+                        title: 'نجاح',
+                        message: data.message
+                    });
                     window.location.href = '/purchases/{{ $purchase->id }}';
                 } else {
-                    alert('حدث خطأ: ' + data.message);
+                    await showAlertDialog({
+                        type: 'error',
+                        title: 'خطأ',
+                        message: 'حدث خطأ: ' + data.message
+                    });
                 }
             })
-            .catch(error => {
+            .catch(async error => {
                 console.error('Error:', error);
-                alert('حدث خطأ أثناء إلغاء الشراء');
+                await showAlertDialog({
+                    type: 'error',
+                    title: 'خطأ',
+                    message: 'حدث خطأ أثناء إلغاء الشراء'
+                });
             });
         }
 

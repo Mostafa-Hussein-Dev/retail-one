@@ -5,11 +5,10 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
         <h1>إدارة المبيعات</h1>
         <div style="display: flex; gap: 1rem; align-items: center;">
-            <form method="POST" action="{{ route('sales.lookup-payment') }}" style="display: flex; gap: 0.5rem;">
-                @csrf
+            <form method="GET" action="{{ route('sales.index') }}" style="display: flex; gap: 0.5rem;">
                 <input type="text"
-                       name="barcode"
-                       placeholder="مسح الباركود للدفع"
+                       name="receipt_number"
+                       placeholder="البحث برقم الإيصال"
                        style="padding: 12px 20px; border: 2px solid #27ae60; border-radius: 6px; font-size: 1rem; min-width: 250px; height: 49px; box-sizing: border-box;"
                        autofocus>
             </form>
@@ -200,6 +199,10 @@
                                 <span style="color: #e74c3c; padding: 6px 13px; border-radius: 6px; font-size: 0.85rem; font-weight: 1000; display: inline-flex; align-items: center; justify-content: center; min-width: 80px;">
                                     ملغي
                                 </span>
+                            @elseif($sale->isFullyReturned())
+                                <span style="color: #f39c12; padding: 6px 13px; border-radius: 6px; font-size: 0.85rem; font-weight: 1000; display: inline-flex; align-items: center; justify-content: center; min-width: 80px;">
+                                    مرتجع بالكامل
+                                </span>
                             @elseif($sale->payment_method === 'debt')
                                 @if($sale->debt_amount > 0)
                                     <span style="color: #f39c12; padding: 6px 13px; border-radius: 6px; font-size: 0.85rem; font-weight: 1000; display: inline-flex; align-items: center; justify-content: center; min-width: 80px;">
@@ -260,17 +263,32 @@
 
 @push('scripts')
     <script>
-        function voidSale(saleId) {
-            const reason = prompt('سبب إلغاء البيع:');
+        async function voidSale(saleId) {
+            const reason = await showPromptDialog({
+                type: 'warning',
+                title: 'سبب الإلغاء',
+                message: 'الرجاء إدخال سبب إلغاء هذا البيع:',
+                placeholder: 'سبب الإلغاء...'
+            });
 
             if (!reason || reason.trim() === '') {
-                alert('يجب إدخال سبب الإلغاء');
+                await showAlertDialog({
+                    type: 'error',
+                    title: 'خطأ',
+                    message: 'يجب إدخال سبب الإلغاء'
+                });
                 return;
             }
 
-            if (!confirm('هل أنت متأكد من إلغاء هذا البيع؟ هذا الإجراء لا يمكن التراجع عنه.')) {
-                return;
-            }
+            const confirmed = await showConfirmDialog({
+                type: 'error',
+                title: 'تأكيد الإلغاء',
+                message: 'هل أنت متأكد من إلغاء هذا البيع؟ هذا الإجراء لا يمكن التراجع عنه.',
+                confirmText: 'تأكيد الإلغاء',
+                cancelText: 'إلغاء'
+            });
+
+            if (!confirmed) return;
 
             fetch(`/sales/${saleId}/void`, {
                 method: 'POST',
@@ -281,17 +299,29 @@
                 body: JSON.stringify({ reason: reason.trim() })
             })
                 .then(response => response.json())
-                .then(data => {
+                .then(async data => {
                     if (data.success) {
-                        alert(data.message);
+                        await showAlertDialog({
+                            type: 'success',
+                            title: 'نجاح',
+                            message: data.message
+                        });
                         location.reload();
                     } else {
-                        alert(data.message);
+                        await showAlertDialog({
+                            type: 'error',
+                            title: 'خطأ',
+                            message: data.message
+                        });
                     }
                 })
-                .catch(error => {
+                .catch(async error => {
                     console.error('Error:', error);
-                    alert('حدث خطأ في إلغاء البيع');
+                    await showAlertDialog({
+                        type: 'error',
+                        title: 'خطأ',
+                        message: 'حدث خطأ في إلغاء البيع'
+                    });
                 });
         }
 

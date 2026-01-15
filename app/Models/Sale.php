@@ -279,18 +279,26 @@ class Sale extends Model
     {
         $returnedQuantities = [];
 
-        foreach ($this->returns as $return) {
+        // Only consider non-voided returns
+        $nonVoidedReturns = $this->returns()->where('is_voided', false)->get();
+
+        foreach ($nonVoidedReturns as $return) {
             foreach ($return->items as $returnItem) {
                 $saleItemId = $returnItem->sale_item_id;
                 $returnedQuantities[$saleItemId] = ($returnedQuantities[$saleItemId] ?? 0) + $returnItem->quantity;
             }
         }
 
-        return $this->items->map(function ($item) use ($returnedQuantities) {
+        // Use saleItems to ensure proper loading
+        $items = $this->relationLoaded('saleItems') ? $this->saleItems : $this->saleItems()->get();
+
+        return $items->map(function ($item) use ($returnedQuantities) {
             $returnedQty = $returnedQuantities[$item->id] ?? 0;
             $item->returnable_quantity = $item->quantity - $returnedQty;
             return $item;
-        })->where('returnable_quantity', '>', 0);
+        })->filter(function ($item) {
+            return $item->returnable_quantity > 0;
+        })->values();
     }
 
     public function processPayment(float $amount): bool
@@ -419,6 +427,58 @@ class Sale extends Model
         }
 
         return $query->notVoided()->with('items')->get()->sum('total_profit') ?? 0;
+    }
+
+    // ===== PHASE 6 NEW METHODS =====
+
+    /**
+     * Get total amount returned from this sale
+     */
+    public function getTotalReturned(): float
+    {
+        return $this->returns()
+            ->where('is_voided', false)
+            ->sum('total_return_amount');
+    }
+
+    /**
+     * Get payment method text in Arabic
+     */
+    public function getPaymentMethodText(): string
+    {
+        return match($this->payment_method) {
+            'cash' => 'نقدي',
+            'debt' => 'دين',
+            default => 'غير معروف',
+        };
+    }
+
+    /**
+     * Check if sale is fully returned (all items returned)
+     */
+    public function isFullyReturned(): bool
+    {
+        $totalReturned = $this->getTotalReturned();
+        return $totalReturned >= $this->total_amount;
+    }
+
+    /**
+     * Check if a specific item can be returned with given quantity
+     *
+     * @param int $saleItemId
+     * @param float $quantity
+     * @return bool
+     */
+    public function canReturnItem(int $saleItemId, float $quantity): bool
+    {
+        $saleItem = $this->saleItems()->find($saleItemId);
+
+        if (!$saleItem) {
+            return false;
+        }
+
+        $availableQty = $saleItem->getAvailableQuantityForReturn();
+        return $quantity <= $availableQty && $quantity > 0;
     }
 
     // Boot method
